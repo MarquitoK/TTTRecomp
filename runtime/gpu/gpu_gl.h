@@ -1217,6 +1217,7 @@ static bool glr_mask_partial(uint32_t m) {
     return false;
 }
 
+static bool kk_rec = false; static GLuint kk_fbo = 0; static DestGL* kk_d = nullptr;   // bars behind: their draws again on the layer target
 static void glr_draw_batch() {
     if (glr_vtx.empty()) return;
     const bool cpe = cp_on();
@@ -1231,6 +1232,7 @@ static void glr_draw_batch() {
     glBufferData(GL_ARRAY_BUFFER, (GLsizeiptr)(glr_vtx.size() * sizeof(VtxGL)), glr_vtx.data(), GL_STREAM_DRAW);
     uint64_t c2 = cpe ? perf_clock() : 0;
     glDrawArrays(GL_TRIANGLES, 0, (GLsizei)glr_vtx.size());
+    if (kk_rec && glr_current == kk_d) { glBindFramebuffer(GL_FRAMEBUFFER, kk_fbo); glDrawArrays(GL_TRIANGLES, 0, (GLsizei)glr_vtx.size()); glBindFramebuffer(GL_FRAMEBUFFER, dfbo(glr_current)); }
     if (cpe) { uint64_t c3 = perf_clock(); cp_db[0]++; cp_db[1] += glr_vtx.size(); cp_db[2] += c1 - c0; cp_db[3] += c2 - c1; cp_db[4] += c3 - c2; }
     if (lite) glUseProgram(glr_prog);
     glr_vtx.clear();
@@ -4417,6 +4419,7 @@ static void glr_flush_queue() {
             if (!(wmask && toon_fno - wat_enh_ok <= 2u)) {   // the shader draws the water: no BT3 normal-map surface
                 glBindVertexArray(gv_vao);
                 glDrawElements(GL_TRIANGLES, (GLsizei)ni, GL_UNSIGNED_INT, (const void*)(ib * 4));
+                if (kk_rec && glr_current == kk_d) { glBindFramebuffer(GL_FRAMEBUFFER, kk_fbo); glDrawElements(GL_TRIANGLES, (GLsizei)ni, GL_UNSIGNED_INT, (const void*)(ib * 4)); glBindFramebuffer(GL_FRAMEBUFFER, dfbo(glr_current)); }
                 glBindVertexArray(glr_vao);
             }
             if (lite) glUseProgram(glr_prog);
@@ -4581,48 +4584,101 @@ static void bk_grab(DestGL* d, int k) {
     glBindFramebuffer(GL_FRAMEBUFFER, dfbo(d));
     if (sc) glEnable(GL_SCISSOR_TEST);
 }
+// layer of the bars: the same draws on a float target that starts at 1 where the scene is dark and 0 where it is bright (per
+// channel); with the screen it gives per pixel how much of the scene shows through (w) and what the bars add (c)
+static GLuint kk_tex = 0, kk_ds = 0, kk_prog = 0, kk_vao = 0; static int kk_w = 0, kk_h = 0; static bool kk_ok = false;
+static bool kk_begin(DestGL* d) {
+    if (!kk_prog) {
+        kk_prog = gl_program("#version 330 core\nvoid main(){ vec2 p = vec2((gl_VertexID & 1) * 4.0 - 1.0, (gl_VertexID >> 1) * 4.0 - 1.0); gl_Position = vec4(p, 0.0, 1.0); }\n",
+                             "#version 330 core\nuniform sampler2D a; out vec4 o;\n"
+                             "void main(){ vec4 A = texelFetch(a, ivec2(gl_FragCoord.xy), 0); o = vec4(vec3(lessThan(A.rgb, vec3(0.5))), A.a); }\n");
+        if (!kk_prog) { kk_prog = 0xFFFFFFFFu; return false; }
+        glGenVertexArrays(1, &kk_vao);
+    }
+    if (kk_prog == 0xFFFFFFFFu) return false;
+    if (kk_w != d->w || kk_h != d->h) {
+        if (!kk_tex) { glGenTextures(1, &kk_tex); glGenRenderbuffers(1, &kk_ds); glGenFramebuffers(1, &kk_fbo); }
+        glBindTexture(GL_TEXTURE_2D, kk_tex);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, d->w, d->h, 0, GL_RGBA, GL_HALF_FLOAT, nullptr);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST); glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glBindRenderbuffer(GL_RENDERBUFFER, kk_ds);
+        glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, d->w, d->h);
+        glBindFramebuffer(GL_FRAMEBUFFER, kk_fbo);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, kk_tex, 0);
+        glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, kk_ds);
+        GLenum st = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+        kk_w = d->w; kk_h = d->h;
+        printf("hud: capa de las barras detras %dx%d %s\n", d->w, d->h, st == GL_FRAMEBUFFER_COMPLETE ? "lista" : "incompleta, sin capa");
+        if (st != GL_FRAMEBUFFER_COMPLETE) { kk_prog = 0xFFFFFFFFu; glBindFramebuffer(GL_FRAMEBUFFER, dfbo(d)); return false; }
+    }
+    glDisable(GL_SCISSOR_TEST);
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, d->fbo);
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, kk_fbo);
+    glBlitFramebuffer(0, 0, d->w, d->h, 0, 0, d->w, d->h, GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT, GL_NEAREST);
+    glBindFramebuffer(GL_FRAMEBUFFER, kk_fbo);
+    glViewport(0, 0, d->w, d->h);
+    glDisable(GL_DEPTH_TEST); glDisable(GL_BLEND); glDisable(GL_STENCIL_TEST);
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    glUseProgram(kk_prog); glBindVertexArray(kk_vao);
+    glActiveTexture(GL_TEXTURE0 + 6); glBindTexture(GL_TEXTURE_2D, bk_tex[0]); glUniform1i(glGetUniformLocation(kk_prog, "a"), 6);
+    glDrawArrays(GL_TRIANGLES, 0, 3);
+    glActiveTexture(GL_TEXTURE0); glUseProgram(glr_prog); glBindVertexArray(glr_vao);
+    glBindFramebuffer(GL_FRAMEBUFFER, dfbo(d));
+    return true;
+}
 static void glr_bars_back(bool begin) {
     DestGL* d = glr_current;
-    if (!patch_fx_keep_bars.val || !d || d->width < 480 * scale_int()) { bk_ok = false; return; }
-    if (begin) { bk_grab(d, 0); bk_ok = false; return; }
-    bk_grab(d, 1); bk_ok = true; bk_d = d;
+    kk_rec = false;
+    if (!patch_fx_keep_bars.val || !d || d->width < 480 * scale_int()) { bk_ok = false; kk_ok = false; return; }
+    if (begin) { bk_grab(d, 0); bk_ok = false; kk_ok = false; if (patch_bars_layer.val && kk_begin(d)) { kk_rec = true; kk_d = d; } return; }
+    bk_grab(d, 1); bk_ok = true; bk_d = d; kk_ok = kk_d == d && kk_w == d->w && kk_h == d->h && kk_prog != 0xFFFFFFFFu && patch_bars_layer.val;
 }
-static void bk_restore(DestGL* d) {
-    if (!bk_prog) {
-        bk_prog = gl_program("#version 330 core\nvoid main(){ vec2 p = vec2((gl_VertexID & 1) * 4.0 - 1.0, (gl_VertexID >> 1) * 4.0 - 1.0); gl_Position = vec4(p, 0.0, 1.0); }\n",
-                             "#version 330 core\nuniform sampler2D a; uniform sampler2D b; uniform sampler2D p; uniform sampler2D e; out vec4 o;\n"
-                             "void main(){ ivec2 q = ivec2(gl_FragCoord.xy); vec3 A = texelFetch(a, q, 0).rgb, P = texelFetch(p, q, 0).rgb, E = texelFetch(e, q, 0).rgb; vec4 B = texelFetch(b, q, 0);\n"
-                             "  if(any(greaterThan(abs(A - B.rgb), vec3(0.5/255.0))) && all(lessThan(abs(P - B.rgb), vec3(0.5/255.0)))) o = vec4(mix(E, P, B.a), 1.0); else discard; }\n");   // translucent bar pixels: the effect shows through by the bar's own alpha
-        if (!bk_prog) { bk_prog = 0xFFFFFFFFu; return; }
-        glGenVertexArrays(1, &bk_vao);
+static GLuint bk_prog2 = 0;
+static void bk_restore(DestGL* d, int mode) {   // mode 0: old rule (no layer); 1: scene back under the bars before the pass; 2: bars over the pass by their layer
+    GLuint& pr = mode ? bk_prog2 : bk_prog;
+    if (!pr) {
+        pr = gl_program("#version 330 core\nvoid main(){ vec2 p = vec2((gl_VertexID & 1) * 4.0 - 1.0, (gl_VertexID >> 1) * 4.0 - 1.0); gl_Position = vec4(p, 0.0, 1.0); }\n",
+                        mode ? "#version 330 core\nuniform sampler2D a; uniform sampler2D b; uniform sampler2D p; uniform sampler2D e; uniform sampler2D k; uniform int m; out vec4 o;\n"
+                               "void main(){ ivec2 q = ivec2(gl_FragCoord.xy); vec3 A = texelFetch(a, q, 0).rgb, B = texelFetch(b, q, 0).rgb, P = texelFetch(p, q, 0).rgb, K = texelFetch(k, q, 0).rgb;\n"
+                               "  vec3 w = (K - B) / (vec3(lessThan(A, vec3(0.5))) - A), c = B - A * w;\n"
+                               "  if(!(any(greaterThan(abs(w - 1.0), vec3(0.01))) || any(greaterThan(abs(c), vec3(0.004)))) || any(greaterThan(abs(P - B), vec3(0.5/255.0)))) discard;\n"
+                               "  o = m == 1 ? vec4(A, 1.0) : vec4(texelFetch(e, q, 0).rgb * clamp(w, 0.0, 1.0) + c, 1.0); }\n"
+                             : "#version 330 core\nuniform sampler2D a; uniform sampler2D b; uniform sampler2D p; uniform sampler2D e; out vec4 o;\n"
+                               "void main(){ ivec2 q = ivec2(gl_FragCoord.xy); vec3 A = texelFetch(a, q, 0).rgb, P = texelFetch(p, q, 0).rgb, E = texelFetch(e, q, 0).rgb; vec4 B = texelFetch(b, q, 0);\n"
+                               "  if(any(greaterThan(abs(A - B.rgb), vec3(0.5/255.0))) && all(lessThan(abs(P - B.rgb), vec3(0.5/255.0)))) o = vec4(mix(E, P, B.a), 1.0); else discard; }\n");
+        if (!pr) { pr = 0xFFFFFFFFu; return; }
+        if (!bk_vao) glGenVertexArrays(1, &bk_vao);
     }
-    if (bk_prog == 0xFFFFFFFFu) return;
+    if (pr == 0xFFFFFFFFu) return;
     glBindFramebuffer(GL_FRAMEBUFFER, dfbo(d));
     glViewport(0, 0, d->w, d->mfbo ? d->mh : d->h);
     glDisable(GL_SCISSOR_TEST); glDisable(GL_DEPTH_TEST); glDepthMask(GL_FALSE); glDisable(GL_BLEND); glDisable(GL_STENCIL_TEST);
     glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_FALSE);
-    glUseProgram(bk_prog); glBindVertexArray(bk_vao);
-    const char* nm[4] = {"a", "b", "p", "e"};
-    for (int i = 0; i < 4; i++) { glActiveTexture(GL_TEXTURE0 + 6 + i); glBindTexture(GL_TEXTURE_2D, bk_tex[i]); glUniform1i(glGetUniformLocation(bk_prog, nm[i]), 6 + i); }
+    glUseProgram(pr); glBindVertexArray(bk_vao);
+    const char* nm[5] = {"a", "b", "p", "e", "k"};
+    for (int i = 0; i < (mode ? 5 : 4); i++) { glActiveTexture(GL_TEXTURE0 + 6 + i); glBindTexture(GL_TEXTURE_2D, i < 4 ? bk_tex[i] : kk_tex); glUniform1i(glGetUniformLocation(pr, nm[i]), 6 + i); }
+    if (mode) glUniform1i(glGetUniformLocation(pr, "m"), mode);
     glDrawArrays(GL_TRIANGLES, 0, 3);
     glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
     glActiveTexture(GL_TEXTURE0);
     if (d->mfbo) d->dirty = true;
-    static int ll = 0; if (ll < 2) { ll++; printf("hud: barras detras protegidas de los efectos de pantalla (%dx%d)\n", d->w, d->h); }
+    static int ll = 0; if (mode != 1 && ll < 2) { ll++; printf("hud: barras detras protegidas de los efectos de pantalla (%dx%d, %s)\n", d->w, d->h, mode ? "capa de mezcla" : "regla anterior"); }
 }
 static void fx_run(DestGL* d, int mainw, float wave) {
     bool bk = bk_ok && bk_d == d && d && bk_w == d->w && bk_h == d->h;
+    bool kl = bk && kk_ok;
     if (bk) bk_grab(d, 2);
+    if (kl) bk_restore(d, 1);
     wat_pass(d, 0, 0, mainw, 272 * scale_int(), wave);
-    if (bk) { bk_grab(d, 3); bk_restore(d); }
-    bk_ok = false;
+    if (bk) { bk_grab(d, 3); bk_restore(d, kl ? 2 : 0); }
+    bk_ok = false; kk_ok = false;
     glActiveTexture(GL_TEXTURE0); glUseProgram(glr_prog); glBindVertexArray(glr_vao);
     if (glr_current) glBindFramebuffer(GL_FRAMEBUFFER, dfbo(glr_current));
 }
 
 // end of the frame with no HUD draw after the scene (every bar behind the fighters, HUD hidden): the screen effects run here
 static void glr_fx_late() {
-    struct BkEnd { ~BkEnd() { bk_ok = false; } } bk_end_;
+    struct BkEnd { ~BkEnd() { bk_ok = false; kk_ok = false; kk_rec = false; } } bk_end_;
     DestGL* d = glr_current; int mainw = 480 * scale_int();
     if (!patch_fx_late.val || !d || d->width < mainw || wat_stale >= 30 || wat_done || !wat_3d || wat_split) return;
     bool won = wat_on();
