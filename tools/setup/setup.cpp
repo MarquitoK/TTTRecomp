@@ -49,7 +49,9 @@ static std::wstring wd(const std::string& s) {
 static bool es = true;
 static const char* T(const char* en, const char* s) { return es ? s : en; }
 static fs::path exe_dir() { wchar_t b[MAX_PATH]; GetModuleFileNameW(nullptr, b, MAX_PATH); return fs::path(b).parent_path(); }
+static fs::path payload_dir;
 static fs::path port_dir() {
+    if (!payload_dir.empty()) return payload_dir;
     fs::path e = exe_dir();
     if (fs::exists(e / "port" / "tools" / "build_from_iso.py")) return e / "port";
     return e;
@@ -192,6 +194,54 @@ static int run_proc(const std::wstring& cmd, const fs::path& cwd, const std::wst
     DWORD code = 1; GetExitCodeProcess(pi.hProcess, &code);
     CloseHandle(pi.hProcess); CloseHandle(pi.hThread); CloseHandle(rd);
     return (int)code;
+}
+
+// ---- port files embedded at the end of the exe: zip + uint64 size + "TTTPORT1"
+static bool unpack_payload() {
+    wchar_t self[MAX_PATH]; GetModuleFileNameW(nullptr, self, MAX_PATH);
+    FILE* f = _wfopen(self, L"rb");
+    if (!f) return false;
+    uint64_t size = 0; char magic[8] = {};
+    _fseeki64(f, -16, SEEK_END);
+    int64_t end = _ftelli64(f);
+    if (fread(&size, 8, 1, f) != 1 || fread(magic, 8, 1, f) != 1 || memcmp(magic, "TTTPORT1", 8) || !size || (int64_t)size > end) { fclose(f); return false; }
+    std::vector<uint8_t> z((size_t)size);
+    _fseeki64(f, end - (int64_t)size, SEEK_SET);
+    bool rd = fread(z.data(), 1, z.size(), f) == z.size();
+    fclose(f);
+    if (!rd) return false;
+    auto u16 = [&](size_t p) { return (uint32_t)z[p] | z[p + 1] << 8; };
+    auto u32 = [&](size_t p) { return u16(p) | u16(p + 2) << 16; };
+    size_t eo = z.size() >= 22 ? z.size() - 22 : 0;
+    while (eo && u32(eo) != 0x06054b50) eo--;
+    if (u32(eo) != 0x06054b50) return false;
+    wchar_t tmp[MAX_PATH]; GetTempPathW(MAX_PATH, tmp);
+    fs::path dir = fs::path(tmp) / (std::string("TTTRecomp-Setup-") + VERSION);
+    std::error_code ec;
+    fs::remove_all(dir, ec);
+    size_t cd = u32(eo + 16);
+    for (uint32_t k = 0, n = u16(eo + 10); k < n; k++) {
+        if (cd + 46 > z.size() || u32(cd) != 0x02014b50) return false;
+        uint32_t method = u16(cd + 10), csz = u32(cd + 20), usz = u32(cd + 24), nl = u16(cd + 28), lo = u32(cd + 42);
+        std::string name((const char*)&z[cd + 46], nl);
+        cd += 46 + nl + u16(cd + 30) + u16(cd + 32);
+        if (name.empty() || name.back() == '/' || name.find("..") != std::string::npos) continue;
+        size_t data = lo + 30 + u16(lo + 26) + u16(lo + 28);
+        if (data + csz > z.size()) return false;
+        std::vector<uint8_t> out;
+        if (method == 0) out.assign(z.begin() + data, z.begin() + data + csz);
+        else if (method == 8) { out.reserve(usz); Inflater inf(&z[data], csz, out); if (!inf.run(false)) return false; }
+        else return false;
+        fs::path fp = dir / fs::u8path(name);
+        fs::create_directories(fp.parent_path(), ec);
+        FILE* o = _wfopen(fp.wstring().c_str(), L"wb");
+        if (!o) return false;
+        fwrite(out.data(), 1, out.size(), o);
+        fclose(o);
+    }
+    if (!fs::exists(dir / "tools" / "build_from_iso.py")) return false;
+    payload_dir = dir;
+    return true;
 }
 
 // ---- build state shared with the worker thread
@@ -734,6 +784,7 @@ int WINAPI wWinMain(HINSTANCE hi, HINSTANCE, LPWSTR, int) {
     job = CreateJobObjectW(nullptr, nullptr);
     JOBOBJECT_EXTENDED_LIMIT_INFORMATION li; memset(&li, 0, sizeof(li)); li.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
     SetInformationJobObject(job, JobObjectExtendedLimitInformation, &li, sizeof(li));
+    unpack_payload();
     WNDCLASSW wc; memset(&wc, 0, sizeof(wc));
     wc.style = CS_OWNDC; wc.lpfnWndProc = proc; wc.hInstance = hi; wc.hCursor = LoadCursor(nullptr, IDC_ARROW); wc.lpszClassName = L"TTTRecompSetup";
     wc.hIcon = LoadIconW(hi, MAKEINTRESOURCEW(1));
@@ -759,7 +810,7 @@ int WINAPI wWinMain(HINSTANCE hi, HINSTANCE, LPWSTR, int) {
     load_font(F[1], fonts / "map_name");
     if (F[1].g.empty()) F[1] = F[0];
     make_spark();
-    if (F[0].g.empty()) MessageBoxW(win, L"No encuentro port/games/ttt/fonts junto al asistente.", L"TTTRecomp", MB_OK | MB_ICONWARNING);
+    if (F[0].g.empty()) MessageBoxW(win, L"No se pudieron preparar los archivos del asistente. Vuelve a descargarlo.", L"TTTRecomp", MB_OK | MB_ICONWARNING);
     ShowWindow(win, SW_SHOW);
     double last = now_s(), t = 0;
     MSG msg;
@@ -789,5 +840,7 @@ out:
     cancel_flag = true;
     if (job) TerminateJobObject(job, 1);
     if (th.joinable()) th.join();
+    std::error_code ec;
+    if (!payload_dir.empty()) fs::remove_all(payload_dir, ec);
     return 0;
 }

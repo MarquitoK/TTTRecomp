@@ -1,5 +1,5 @@
-# Builds dist/TTTRecomp-v<version>-win64.zip: TTTRecomp-Setup.exe + port/ (the files tracked by git)
-import argparse, os, re, shutil, subprocess, sys, zipfile
+# Builds dist/TTTRecomp-Setup-v<version>.exe: the setup with the port files (tracked by git) embedded at the end
+import argparse, io, os, re, shutil, struct, subprocess, sys, zipfile
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -55,7 +55,7 @@ def main():
     ver = version()
     dist = os.path.join(REPO, 'dist')
     os.makedirs(dist, exist_ok=True)
-    exe = os.path.join(dist, 'TTTRecomp-Setup.exe')
+    exe = os.path.join(dist, 'setup_base.exe')
     if a.setup:
         shutil.copyfile(a.setup, exe)
     else:
@@ -63,14 +63,19 @@ def main():
         print('compilando el asistente con ' + bindir)
         build_setup(exe, bindir)
 
-    out = os.path.join(dist, 'TTTRecomp-v%s-win64.zip' % ver)
-    with zipfile.ZipFile(out, 'w', zipfile.ZIP_DEFLATED, compresslevel=9) as z:
-        z.write(exe, 'TTTRecomp-Setup.exe')
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED, compresslevel=9) as z:
         for f in files:
-            z.write(os.path.join(REPO, f), 'port/' + f)
-    print('%d archivos del port + asistente' % len(files))
+            z.write(os.path.join(REPO, f), f)
+    data = buf.getvalue()
+    out = os.path.join(dist, 'TTTRecomp-Setup-v%s.exe' % ver)
+    with open(out, 'wb') as o:
+        o.write(open(exe, 'rb').read())
+        o.write(data)
+        o.write(struct.pack('<Q', len(data)) + b'TTTPORT1')
+    os.remove(exe)
+    print('%d archivos del port dentro del asistente' % len(files))
     print('listo: %s (%.1f MB)' % (out, os.path.getsize(out) / 1048576))
-
 
 if __name__ == '__main__':
     main()

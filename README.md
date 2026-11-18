@@ -31,12 +31,11 @@ TTTRecomp is not an emulator. The game's MIPS code is translated ahead of time i
 
 ## Installing (players)
 
-1. Download the latest release (`TTTRecomp-vX.Y.Z-win64.zip`) from the [Releases](../../releases) page and unzip it. Keep the `port` folder next to the setup.
-2. Run **`TTTRecomp-Setup.exe`**.
-3. Drop your ISO onto the window, or click to browse for it. The setup checks that it is the right game and version.
-4. Choose your options: character colours (all or only the originals), everything unlocked from the start, install folder, and desktop shortcut.
-5. Press **Build**. The first build takes a while (around 20 to 30 minutes, depending on your PC). Your ISO is only read and is never changed.
-6. When it finishes, press **Play**, or use the desktop shortcut or `launcher.exe` in the install folder.
+1. Download **`TTTRecomp-Setup-vX.Y.Z.exe`** from the [Releases](../../releases) page and run it. It is a single file: everything the port needs is inside.
+2. Drop your ISO onto the window, or click to browse for it. The setup checks that it is the right game and version.
+3. Choose your options: character colours (all or only the originals), everything unlocked from the start, install folder, and desktop shortcut. The port files, the generated C++ code, and the extracted assets all go into that install folder.
+4. Press **Build**. The first build takes a while (around 20 to 30 minutes, depending on your PC). Your ISO is only read and is never changed.
+5. When it finishes, press **Play**, or use the desktop shortcut or `launcher.exe` in the install folder.
 
 Running the setup again on the same folder rebuilds the port and keeps your mods and saves.
 
@@ -83,7 +82,7 @@ The pipeline:
 
 Everything generated (`game/`, `generated/`, `assets/`) stays on your machine and is ignored by git.
 
-To build the setup itself (or the whole release zip with `python tools/make_release.py`, which writes it to `dist/`):
+To build the setup itself (or the release build with `python tools/make_release.py`, which writes the single-file setup with the port embedded to `dist/`):
 
 ```
 windres tools/setup/setup.rc -O coff -o generated/setup_res.o
