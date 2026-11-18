@@ -37,7 +37,11 @@ TTTRecomp is not an emulator. The game's MIPS code is translated ahead of time i
 4. Press **Build**. The first build takes a while (around 20 to 30 minutes, depending on your PC). Your ISO is only read and is never changed.
 5. When it finishes, press **Play**, or use the desktop shortcut or `launcher.exe` in the install folder.
 
-Running the setup again on the same folder rebuilds the port and keeps your mods and saves.
+### Updates
+
+When a new release is out, the game offers to update when you start it (checked once a day), and the setup shows it on its first page. Updating only rebuilds what the new version changed, so it usually takes a few minutes, and it keeps your mods, saves, and settings. The assets are only extracted again when the extractor itself changes.
+
+Running the setup again on the same folder also updates the port and keeps your mods and saves.
 
 ### Controls
 

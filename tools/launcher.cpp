@@ -1,11 +1,13 @@
-// windres tools/launcher.rc -O coff -o generated/launcher_res.o && g++ -O2 -std=c++17 -municode -mwindows -static -o launcher.exe tools/launcher.cpp generated/launcher_res.o
+// windres tools/launcher.rc -O coff -o generated/launcher_res.o && g++ -O2 -std=c++17 -municode -mwindows -static -o launcher.exe tools/launcher.cpp generated/launcher_res.o -lwinhttp
 #include <windows.h>
 #include <string>
+#include <algorithm>
 #include <vector>
 #include <cstdio>
 #include <cstdint>
 #include <cstring>
 #include <utility>
+#include "setup/update_check.h"
 
 static std::wstring raiz;
 
@@ -26,6 +28,11 @@ static bool existe(const std::wstring& r) { return GetFileAttributesW(r.c_str())
 static void aviso(const std::wstring& t) { MessageBoxW(nullptr, t.c_str(), L"DBZ TTT", MB_OK | MB_ICONERROR); }
 
 static const char* CFG_BASE =
+    "args=--window\n"
+    "log=launcher.log\n"
+    "timing=0\n";
+// the file the first alpha wrote (a test name and test window): its saves folder is kept, the rest goes
+static const char* CFG_ALPHA =
     "args=--window --name MARCOS\n"
     "TTT_SAVE_DIR=save_test\n"
     "TTT_GLRAST=1\n"
@@ -35,6 +42,40 @@ static const char* CFG_BASE =
     "msys=C:\\msys64\n"
     "log=launcher.log\n"
     "timing=0\n";
+
+static std::string read_all(const std::wstring& p) {
+    std::string s;
+    if (FILE* f = _wfopen(p.c_str(), L"rb")) { char b[4096]; size_t n; while ((n = fread(b, 1, sizeof(b), f)) > 0) s.append(b, n); fclose(f); }
+    return s;
+}
+
+// a newer release on GitHub: asked once a day; "Update" runs the setup of the install folder in update mode
+static bool update_offer() {
+    if (GetEnvironmentVariableW(L"TTT_NO_UPDATE", nullptr, 0)) return false;
+    std::wstring setup = raiz + L"\\TTTRecomp-Setup.exe";
+    std::string cfg = read_all(raiz + L"\\setup.cfg");
+    size_t v = cfg.find("version=");
+    if (!existe(setup) || v == std::string::npos) return false;
+    std::string mine = cfg.substr(v + 8, cfg.find('\n', v) - v - 8);
+    while (!mine.empty() && (mine.back() == '\r' || mine.back() == ' ')) mine.pop_back();
+    SYSTEMTIME t; GetLocalTime(&t);
+    char today[16]; snprintf(today, sizeof(today), "%04d%02d%02d", t.wYear, t.wMonth, t.wDay);
+    std::wstring mark = raiz + L"\\update_check.txt";
+    if (read_all(mark) == today) return false;
+    UpdRelease r;
+    if (!upd_latest(mine, r, 3000)) return false;
+    if (FILE* f = _wfopen(mark.c_str(), L"wb")) { fputs(today, f); fclose(f); }
+    bool es = read_all(raiz + L"\\generated\\src\\settings.cfg").find("language 3") != std::string::npos;
+    std::wstring tag = ancho(r.tag);
+    std::wstring m = es ? L"Hay una versi\u00F3n nueva de TTTRecomp (" + tag + L").\n\n\u00BFActualizar ahora? Tarda unos minutos y conserva tus mods y partidas."
+                        : L"A new version of TTTRecomp is available (" + tag + L").\n\nUpdate now? It takes a few minutes and keeps your mods and saves.";
+    if (MessageBoxW(nullptr, m.c_str(), L"TTTRecomp", MB_YESNO | MB_ICONINFORMATION) != IDYES) return false;
+    std::wstring cmd = L"\"" + setup + L"\" --update";
+    STARTUPINFOW si = {}; si.cb = sizeof(si); PROCESS_INFORMATION pi = {};
+    if (!CreateProcessW(nullptr, &cmd[0], nullptr, nullptr, FALSE, 0, nullptr, raiz.c_str(), &si, &pi)) return false;
+    CloseHandle(pi.hProcess); CloseHandle(pi.hThread);
+    return true;
+}
 
 int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
     wchar_t buf[MAX_PATH * 2];
@@ -69,7 +110,15 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
         SendMessageTimeoutW(w, WM_COPYDATA, 0, (LPARAM)&c, SMTO_ABORTIFHUNG, 5000, &r);
         return 0;
     }
+    bool main_cfg = _wcsicmp(cfg.c_str(), L"launcher.cfg") == 0;
     cfg = absoluta(cfg);
+    if (existe(raiz + L"\\toolchain")) {
+        std::string body = read_all(cfg);
+        body.erase(std::remove(body.begin(), body.end(), '\r'), body.end());
+        if (body == CFG_ALPHA)
+            if (FILE* f = _wfopen(cfg.c_str(), L"wb")) { fputs((std::string(CFG_BASE) + "TTT_SAVE_DIR=save_test\n").c_str(), f); fclose(f); }
+    }
+    if (main_cfg && update_offer()) return 0;
     if (!existe(cfg)) {
         std::wstring old = cfg;
         size_t q = old.rfind(L"launcher");

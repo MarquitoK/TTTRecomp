@@ -3,7 +3,8 @@
 # The setup assistant runs it and reads the lines that start with @: "@paso K N clave", "@avance a b", "@error clave texto", "@fin".
 #   --iso PATH  --root DIR (install folder; the port's own folders are copied there when missing)  --colors all|original
 #   --until iso|juego|parches|traducir|compilar|assets  --jobs N  --no-unlock  --compare DIR (sha1 of game/ against another install)  --force
-#   --resume skips the steps already finished with the same port files and options (build_state.json)
+#   --resume skips the steps whose inputs did not change (build_state.json): an update only redoes what its files touch
+# ASSETS_VERSION: raise it when the extractor changes in a way that needs assets/ made again; asset patch changes alone are applied in place
 import argparse, hashlib, json, os, re, shutil, struct, subprocess, sys, time
 
 REPO = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
@@ -14,6 +15,7 @@ LAYERS = 'base,anim,move,actions,actions5,float,camera,wlan,struggle,input,debri
 PATCHES = [('patch_border.py', ['--nivel', '2']), ('patch_name.py', ['--sin-aviso']), ('patch_boot.py', []), ('patch_limits.py', []), ('patch_unlock.py', []),
            ('patch_60fps.py', ['--layers', LAYERS]), ('patch_roster.py', [])]
 STEPS = ['iso', 'juego', 'parches', 'traducir', 'compilar', 'assets']
+ASSETS_VERSION = 1
 CXXFLAGS = '-O2 -std=c++17 -fno-strict-aliasing -w -I../../runtime -I.'
 SECTOR = 2048
 
@@ -45,17 +47,22 @@ def run(cmd, cwd, key, on_line=None):
         fail(key, (tail[-1] if tail else 'codigo %d' % p.returncode)[:300])
 
 
-def port_hash(root, opts):
-    h = hashlib.sha1(opts.encode())
-    for name in OWN:
-        for dp, dn, fn in sorted(os.walk(os.path.join(root, name))):
-            dn.sort()
-            if '__pycache__' in dp:
+def tree_hash(root, seed, parts):
+    h = hashlib.sha1(seed.encode())
+    for part in parts:
+        base = os.path.join(root, part)
+        files = [base] if os.path.isfile(base) else [os.path.join(dp, f) for dp, dn, fn in os.walk(base) for f in fn if '__pycache__' not in dp]
+        for f in sorted(files):
+            if part.endswith('/*') or os.path.basename(f) == 'applied.json':
                 continue
-            for f in sorted(fn):
-                h.update(os.path.relpath(os.path.join(dp, f), root).replace('\\', '/').encode())
-                h.update(open(os.path.join(dp, f), 'rb').read())
+            h.update(os.path.relpath(f, root).replace('\\', '/').encode())
+            h.update(open(f, 'rb').read())
     return h.hexdigest()
+
+
+def top_files(root, d):
+    p = os.path.join(root, d)
+    return [os.path.join(d, n) for n in sorted(os.listdir(p)) if os.path.isfile(os.path.join(p, n))] if os.path.isdir(p) else []
 
 
 def sfo_id(d):
@@ -168,65 +175,92 @@ def main():
     stage(root)
     py = sys.executable
     state_path = os.path.join(root, 'build_state.json')
-    ph = port_hash(root, 'unlock=%d' % (not a.no_unlock))
     try:
-        st = json.load(open(state_path)) if a.resume else {}
+        st = json.load(open(state_path)).get('h', {}) if a.resume else {}
     except Exception:
         st = {}
-    done = st.get('done', []) if st.get('hash') == ph else []
-    chain = [True]
+    data = top_files(root, os.path.join('games', 'ttt'))
+    hp = tree_hash(root, 'unlock=%d' % (not a.no_unlock), ['patchers'] + data)
+    ht = tree_hash(root, hp, ['recompiler'])
+    hc = tree_hash(root, ht, ['runtime', os.path.join('tools', 'launcher.cpp'), os.path.join('tools', 'launcher.rc')])
+    ha = tree_hash(root, '', [os.path.join('games', 'ttt', 'asset_patches')])
 
-    def skip(k, key, keys):
-        if chain[0] and all(x in done for x in keys):
+    def save():
+        json.dump({'h': st}, open(state_path, 'w'), indent=0)
+
+    def skip(k, key, h):
+        if st.get(key) == h:
             step(k, key)
-            say('%s: ya hecho, se conserva' % key)
+            say('%s: sin cambios, se conserva' % key)
             say('@avance 1 1')
             return True
-        chain[0] = False
         return False
 
-    def finished(key):
-        done.append(key)
-        json.dump({'hash': ph, 'done': done}, open(state_path, 'w'))
-
-    json.dump({'hash': ph, 'done': done}, open(state_path, 'w'))
-    if skip(1, 'iso', ['parches']) and skip(2, 'juego', ['parches']) and skip(3, 'parches', ['parches']):
-        pass
+    if st.get('parches') == hp:
+        for k, key in ((1, 'iso'), (2, 'juego'), (3, 'parches')):
+            skip(k, key, hp)
     else:
+        st.pop('traducir', None); st.pop('compilar', None)
         game_and_patches(a, root, iso, py, last)
         if last >= 3:
-            finished('parches')
+            st['parches'] = hp
+            save()
     if last <= 3:
         return say('@fin')
 
-    if not skip(4, 'traducir', ['traducir']):
+    if not skip(4, 'traducir', ht):
+        st.pop('compilar', None)
         translate(root, py)
-        finished('traducir')
+        st['traducir'] = ht
+        save()
     if last == 4:
         return say('@fin')
 
-    if not skip(5, 'compilar', ['compilar']):
+    if not skip(5, 'compilar', hc):
         build(a, root)
-        finished('compilar')
+        st['compilar'] = hc
+        save()
     if last == 5:
         return say('@fin')
 
     step(6, 'assets')
     ok_mark = os.path.join(root, 'assets', '.port_assets_ok')
     packfile = os.path.join(root, 'assets', 'Packfile')
-    if os.path.isdir(packfile) and (os.path.isfile(ok_mark) or not os.path.isdir(os.path.join(root, 'toolchain'))):
-        say('assets: ya existen, se conservan')
+    try:
+        aver = int(open(ok_mark).read().strip() or 1)
+    except Exception:
+        aver = 0
+    dev = not os.path.isdir(os.path.join(root, 'toolchain'))   # his own work folder: assets are his, never redone here
+    if os.path.isdir(packfile) and (dev or aver >= ASSETS_VERSION):
+        if aver and st.get('assets') != ha:
+            say('assets: parches de assets nuevos, se aplican sin reextraer')
+            say('@avance 0 3')
+            run([py, os.path.join(root, 'tools', 'unify_assets.py'), '--undo'], root, 'assets')
+            say('@avance 1 3')
+            run([py, os.path.join(root, 'tools', 'asset_patches.py'), '--apply'], root, 'assets')
+            say('@avance 2 3')
+            run([py, os.path.join(root, 'tools', 'unify_assets.py'), '--apply'], root, 'assets')
+        else:
+            say('assets: ya existen, se conservan')
+        st['assets'] = ha
+        save()
         say('@avance 1 1')
         say('listo en %d s' % (time.time() - t0))
         return say('@fin')
-    if os.path.isdir(os.path.join(root, 'assets')):
+    if aver and aver < ASSETS_VERSION:
+        say('assets: el extractor cambio (version %d -> %d), se extraen de nuevo' % (aver, ASSETS_VERSION))
+    elif os.path.isdir(os.path.join(root, 'assets')):
         say('assets: incompletos de un intento anterior, se rehacen')
+    if os.path.isdir(os.path.join(root, 'assets')):
         shutil.rmtree(os.path.join(root, 'assets'))
     def assets(line):
         m = re.match(r'== (\d+)/(\d+) ', line)
         if m:
             say('@avance %d %s' % (int(m.group(1)) - 1, m.group(2)))
     run([py, os.path.join(root, 'tools', 'port_assets.py'), '--colors', a.colors], root, 'assets', assets)
+    open(ok_mark, 'w').write(str(ASSETS_VERSION))
+    st['assets'] = ha
+    save()
     say('listo en %d s' % (time.time() - t0))
     say('@fin')
 
@@ -283,7 +317,7 @@ def build(a, root):
     if os.path.isfile(os.path.join(root, 'games', 'ttt', 'icons', 'tttrecomp.ico')):
         run(['windres', os.path.join('tools', 'launcher.rc'), '-O', 'coff', '-o', os.path.join('generated', 'launcher_res.o')], root, 'compilar')
         res = [os.path.join('generated', 'launcher_res.o')]
-    run(['g++', '-O2', '-std=c++17', '-municode', '-mwindows', '-static', '-o', 'launcher.exe', os.path.join('tools', 'launcher.cpp')] + res, root, 'compilar')
+    run(['g++', '-O2', '-std=c++17', '-municode', '-mwindows', '-static', '-o', 'launcher.exe', os.path.join('tools', 'launcher.cpp')] + res + ['-lwinhttp'], root, 'compilar')
     gxx = shutil.which('g++')
     for dll in ('libgcc_s_seh-1.dll', 'libstdc++-6.dll', 'libwinpthread-1.dll'):
         p = os.path.join(os.path.dirname(gxx), dll) if gxx else ''

@@ -1,5 +1,6 @@
 // TTTRecomp setup assistant: checks the ISO, downloads the toolchain, runs tools/build_from_iso.py and shows every step.
 // windres tools/setup/setup.rc -O coff -o generated/setup_res.o
+// --update: run from the install folder by the launcher, rebuilds only what the new version changed
 // g++ -O2 -std=c++17 -municode -mwindows -static -o TTTRecomp-Setup.exe tools/setup/setup.cpp generated/setup_res.o -lopengl32 -lglu32 -lgdi32 -lwinhttp -lbcrypt -lole32 -luuid -lshell32 -lcomdlg32
 #ifndef UNICODE
 #define UNICODE
@@ -23,9 +24,10 @@
 #include <thread>
 #include <vector>
 #include "../../runtime/gpu/image.h"
+#include "update_check.h"
 
 namespace fs = std::filesystem;
-static const char* VERSION = "0.1.0-alpha";
+static const char* VERSION = "0.1.1-alpha";   // the release tag is "v" + this
 static const wchar_t* TC_URL = L"https://github.com/brechtsanders/winlibs_mingw/releases/download/15.2.0posix-14.0.0-ucrt-r7/winlibs-x86_64-posix-seh-gcc-15.2.0-mingw-w64ucrt-14.0.0-r7.zip";
 static const char* TC_SHA = "cb2fbad6162540cdf5e1facdce08d4dac359e8cf64f7f696a99274291763b815";
 static const wchar_t* PY_URL = L"https://www.python.org/ftp/python/3.13.17/python-3.13.17-embed-amd64.zip";
@@ -152,7 +154,7 @@ static bool download(const std::wstring& url, const fs::path& dst, const char* s
     WinHttpCloseHandle(r); WinHttpCloseHandle(c); WinHttpCloseHandle(s);
     if (cancel_flag) { *err = "cancel"; return false; }
     if (!f || (dl_total && dl_done != dl_total)) { *err = "net"; return false; }
-    if (h.hex() != sha) { *err = "sha"; return false; }
+    if (sha && *sha && h.hex() != sha) { *err = "sha"; return false; }
     fs::remove(dst); fs::rename(dst.wstring() + L".part", dst);
     return true;
 }
@@ -271,6 +273,27 @@ static void bstep(int k) {
     if (k < S_N) B.t0[k] = t;
 }
 
+// ---- updates: a newer release replaces this setup (and then the game); setup.cfg in the install folder keeps the options
+static bool upd_mode = false;
+static std::atomic<int> upd_state(0);   // 0 checking, 1 none, 2 available, 3 downloading, 4 failed
+static UpdRelease upd_rel;
+static fs::path self_path() { wchar_t b[MAX_PATH]; GetModuleFileNameW(nullptr, b, MAX_PATH); return b; }
+static void upd_check() { std::thread([] { UpdRelease r; const char* tv = getenv("TTT_SETUP_VERSION"); bool ok = upd_latest(tv && *tv ? tv : VERSION, r, 8000); if (ok) upd_rel = r; upd_state = ok ? 2 : 1; }).detach(); }
+static void upd_apply() {   // download the new setup, swap it with this one and start it with the same mode
+    upd_state = 3;
+    std::thread([] {
+        fs::path self = self_path(), nw = self.wstring() + L".new", old = self.wstring() + L".old";
+        std::string err;
+        if (!download(wd(upd_rel.url), nw, upd_rel.sha.c_str(), &err)) { upd_state = 4; return; }
+        DeleteFileW(old.wstring().c_str());
+        if (!MoveFileExW(self.wstring().c_str(), old.wstring().c_str(), MOVEFILE_REPLACE_EXISTING) || !MoveFileExW(nw.wstring().c_str(), self.wstring().c_str(), MOVEFILE_REPLACE_EXISTING)) { upd_state = 4; return; }
+        std::wstring cmd = L"\"" + self.wstring() + L"\"" + (upd_mode ? L" --update" : L"");
+        STARTUPINFOW si; memset(&si, 0, sizeof(si)); si.cb = sizeof(si); PROCESS_INFORMATION pi;
+        if (CreateProcessW(nullptr, &cmd[0], nullptr, nullptr, FALSE, 0, nullptr, self.parent_path().wstring().c_str(), &si, &pi)) { CloseHandle(pi.hProcess); CloseHandle(pi.hThread); ExitProcess(0); }
+        upd_state = 4;
+    }).detach();
+}
+
 struct Options { std::wstring iso; fs::path root; bool all_colors = true, unlock = true, shortcut = true; int lang = 3; } O;
 
 static bool copy_port(const fs::path& from, const fs::path& to) {
@@ -343,7 +366,15 @@ static void worker() {
     fs::create_directories(root / "generated" / "src", ec);
     if (FILE* f = _wfopen((root / "generated" / "src" / "settings.cfg").wstring().c_str(), L"r")) fclose(f);
     else if (FILE* g = _wfopen((root / "generated" / "src" / "settings.cfg").wstring().c_str(), L"w")) { fprintf(g, "language %d\nfit 2\n", O.lang); fclose(g); }
-    if (O.shortcut) shortcut(root);
+    if (O.shortcut && !upd_mode) shortcut(root);
+    {   // the install folder keeps this setup and its options: the launcher runs it to update
+        fs::path self = self_path(), dst = root / "TTTRecomp-Setup.exe";
+        if (!fs::equivalent(self, dst, ec)) fs::copy_file(self, dst, fs::copy_options::overwrite_existing, ec);
+        if (FILE* f = _wfopen((root / "setup.cfg").wstring().c_str(), L"w")) {
+            fprintf(f, "version=%s\ncolors=%s\nunlock=%d\niso=%s\n", VERSION, O.all_colors ? "all" : "original", O.unlock ? 1 : 0, u8(O.iso).c_str());
+            fclose(f);
+        }
+    }
     bstep(S_N);
     std::lock_guard<std::mutex> g(B.m);
     B.state = 1;
@@ -565,7 +596,9 @@ static uint64_t free_space(const fs::path& p) {
 }
 static const uint64_t NEED = 8ull << 30;
 
+static bool build_started = false;
 static void start_build() {
+    build_started = true;
     { std::lock_guard<std::mutex> g(B.m); B.step = -1; B.state = 0; B.err.clear(); B.log.clear(); for (int i = 0; i < S_N; i++) B.t0[i] = B.t1[i] = 0; }
     cancel_flag = false;
     O.lang = es ? 3 : 1;
@@ -586,7 +619,8 @@ static void draw_header(float t) {
     float bolt = 0.75f + 0.25f * sinf(t * 3);
     col(0xF2A33A, bolt); glBegin(GL_TRIANGLES); glVertex2f(30, 18); glVertex2f(22, 36); glVertex2f(32, 34); glVertex2f(30, 46); glVertex2f(40, 28); glVertex2f(30, 30); glEnd();
     text(1, 50, 18, 26, "TTTRecomp", 0xFFFFFF);
-    text(0, 50 + text_w(1, 26, "TTTRecomp") + 10, 26, 14, std::string("v") + VERSION, 0x7F93B4, 1, 0, false);
+    text(0, 50 + text_w(1, 26, "TTTRecomp") + 10, 17, 14, std::string("v") + VERSION, 0x7F93B4, 1, 0, false);
+    text(0, 50 + text_w(1, 26, "TTTRecomp") + 10, 33, 13, "By Los ijue30s", 0xF2A33A, 0.85f, 0, false);
     static const char* P[5][2] = {{"Welcome", "Bienvenida"}, {"ISO", "ISO"}, {"Options", "Opciones"}, {"Build", "Construcción"}, {"Done", "Listo"}};
     float x = VW - 20;
     for (int i = 4; i >= 0; i--) {
@@ -601,6 +635,21 @@ static void draw_header(float t) {
     }
 }
 static void footer_line() { rect(0, VH - 70, VW, 1, 0x2A3140, 1); }
+// new release notice in the footer of the first pages
+static void upd_banner() {
+    int st = upd_state;
+    if (st < 2) return;
+    float cx = VW / 2, y = VH - 52;
+    if (st == 2) {
+        std::string m = std::string(T("New version available: ", "Versión nueva disponible: ")) + upd_rel.tag;
+        float w = text_w(0, 15, m), bw = text_w(0, 16, T("Update", "Actualizar")) + 30, x0 = cx - (w + 12 + bw) / 2;
+        text(0, x0, y + 9, 15, m, 0xFFB54E, 1, 0, false);
+        if (button(x0 + w + 12, y + 2, bw, 32, T("Update", "Actualizar"), true)) upd_apply();
+    } else if (st == 3) {
+        char pc[64]; snprintf(pc, sizeof(pc), "%s %d%%", T("Downloading the new version...", "Descargando la versión nueva..."), dl_total ? (int)(dl_done * 100 / dl_total) : 0);
+        text(0, cx, y + 9, 15, pc, 0xFFB54E, 1, 1, false);
+    } else text(0, cx, y + 9, 15, T("The update could not be downloaded.", "No se pudo descargar la actualización."), 0xFF8A70, 1, 1, false);
+}
 
 static void page_welcome(float t) {
     aura(720, 300, 120, 0, t, 0.45f, false);
@@ -696,8 +745,14 @@ static void page_build(float t) {
     if (p > 0.12f && state == 0) { double r = el * (1 - p) / p; rem = std::string("~") + std::to_string((int)(r / 60) + 1) + T(" min left", " min restantes"); }
     text(0, cx, cy + 24, 14, state == 2 ? T("Stopped", "Detenido") : state == 3 ? T("Cancelled", "Cancelado") : rem.empty() ? clock_s(el) : rem, 0xE8EDF5, 1, 1, true);
     float x = 360, y = 92;
-    text(1, x, y, 26, state == 2 ? T("Something went wrong", "Algo salió mal") : T("Building your game", "Construyendo tu juego"), state == 2 ? 0xFF8A70 : 0xFFFFFF);
-    text(0, x, y + 36, 15, T("This takes a while; your PC stays usable.", "Esto tarda un rato; tu PC sigue usable."), 0x7F93B4, 1, 0, false);
+    text(1, x, y, 26, state == 2 ? std::string(T("Something went wrong", "Algo salió mal")) : (upd_mode ? std::string(T("Updating to v", "Actualizando a la v")) + VERSION : std::string(T("Building your game", "Construyendo tu juego"))), state == 2 ? 0xFF8A70 : 0xFFFFFF);
+    if (!build_started) {
+        int us = upd_state;
+        char m[96];
+        if (us == 3) snprintf(m, sizeof(m), "%s %d%%", T("Downloading the new version...", "Descargando la versión nueva..."), dl_total ? (int)(dl_done * 100 / dl_total) : 0);
+        else snprintf(m, sizeof(m), "%s", T("Looking for the new version...", "Buscando la versión nueva..."));
+        text(0, x, y + 36, 15, m, 0xFFB54E, 1, 0, false);
+    } else text(0, x, y + 36, 15, upd_mode ? T("Only what changed is rebuilt; your mods and saves are kept.", "Solo se rehace lo que cambió; tus mods y partidas se conservan.") : T("This takes a while; your PC stays usable.", "Esto tarda un rato; tu PC sigue usable."), 0x7F93B4, 1, 0, false);
     if (details) {
         rrect(x, 150, VW - x - 30, 370, 10, 0x0B0F18, 1);
         for (size_t i = 0; i < tail.size(); i++) {
@@ -785,6 +840,29 @@ int WINAPI wWinMain(HINSTANCE hi, HINSTANCE, LPWSTR, int) {
     JOBOBJECT_EXTENDED_LIMIT_INFORMATION li; memset(&li, 0, sizeof(li)); li.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
     SetInformationJobObject(job, JobObjectExtendedLimitInformation, &li, sizeof(li));
     unpack_payload();
+    DeleteFileW((self_path().wstring() + L".old").c_str());
+    {   // --update (from the launcher): the install folder is where this setup lives; its options are in setup.cfg
+        int argc = 0;
+        wchar_t** argv = CommandLineToArgvW(GetCommandLineW(), &argc);
+        for (int i = 1; i < argc; i++) if (!wcscmp(argv[i], L"--update")) upd_mode = true;
+        LocalFree(argv);
+    }
+    if (upd_mode) {
+        O.root = exe_dir(); O.shortcut = false;
+        if (FILE* f = _wfopen((O.root / "setup.cfg").wstring().c_str(), L"r")) {
+            char l[1024];
+            while (fgets(l, sizeof(l), f)) {
+                std::string v = l; while (!v.empty() && (v.back() == '\n' || v.back() == '\r')) v.pop_back();
+                if (!v.compare(0, 7, "colors=")) O.all_colors = v.substr(7) != "original";
+                else if (!v.compare(0, 7, "unlock=")) O.unlock = v.substr(7) != "0";
+                else if (!v.compare(0, 4, "iso=")) O.iso = wd(v.substr(4));
+            }
+            fclose(f);
+        }
+        if (fs::exists(O.root / "game" / "game.iso")) O.iso = (O.root / "game" / "game.iso").wstring();
+        page = 3;
+    }
+    upd_check();
     WNDCLASSW wc; memset(&wc, 0, sizeof(wc));
     wc.style = CS_OWNDC; wc.lpfnWndProc = proc; wc.hInstance = hi; wc.hCursor = LoadCursor(nullptr, IDC_ARROW); wc.lpszClassName = L"TTTRecompSetup";
     wc.hIcon = LoadIconW(hi, MAKEINTRESOURCEW(1));
@@ -828,11 +906,16 @@ int WINAPI wWinMain(HINSTANCE hi, HINSTANCE, LPWSTR, int) {
         glEnable(GL_LINE_SMOOTH); glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);
         tick_parts(dt);
         draw_header((float)t);
+        if (upd_mode && !build_started) {   // update: first this setup (newer release), then the game
+            if (upd_state == 2) upd_apply();
+            else if (upd_state == 1 || upd_state == 4) start_build();
+        }
         if (page == 0) page_welcome((float)t);
         else if (page == 1) page_iso((float)t);
         else if (page == 2) page_options((float)t);
         else if (page == 3) page_build((float)t);
         else page_done((float)t);
+        if (page <= 2) upd_banner();
         mclick = kenter = kesc = false;
         SwapBuffers(dc);
     }
