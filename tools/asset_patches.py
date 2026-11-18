@@ -248,6 +248,10 @@ def parse(path):
     return paks
 
 
+def is_txt1(path):
+    return os.path.isdir(path) and path.lower().endswith('.txt1')
+
+
 def entry_files(folder):
     files = {}
     for dp, dn, fn in os.walk(folder):
@@ -357,7 +361,7 @@ def apply(write, iso=None, force=False):
                 srcs, ok = {}, True
                 for num, h in e['need'].items():
                     p = files.get(num)
-                    d = open(p, 'rb').read() if p and os.path.isfile(p) else None
+                    d = open(p, 'rb').read() if p and os.path.isfile(p) else op.empaquetar_txt1(p) if p and is_txt1(p) else None
                     if d is None or digest(d) != h:
                         d = original(pak['path'], num)
                     if d is None or digest(d) != h:
@@ -397,6 +401,30 @@ def apply(write, iso=None, force=False):
                             op.quitar_textura(dest)
                             with open(dest, 'wb') as o:
                                 o.write(d)
+                        state[key] = e['hash']
+                    done += 1
+                    continue
+                # an opened txt1 (folder with _txt1.bin) is compared repacked and reopened with the patched text
+                if dest and is_txt1(dest):
+                    d = rebuild(e['ops'], srcs)
+                    if len(d) != e['size'] or digest(d) != e['hash']:
+                        print('%s: result does not match, skipped' % label)
+                        bad += 1
+                        continue
+                    key = '%s#%d' % (pak['path'], e['num'])
+                    if op.mismo_txt1(op.empaquetar_txt1(dest), d):
+                        state[key] = e['hash']
+                        skipped += 1
+                        continue
+                    if key in state and not force:
+                        print('%s: text was edited after patching, kept (--force replaces it)' % label)
+                        skipped += 1
+                        continue
+                    if write:
+                        if not op.abrir_txt1(dest, d):
+                            print('%s: patched text could not be opened, skipped' % label)
+                            bad += 1
+                            continue
                         state[key] = e['hash']
                     done += 1
                     continue

@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
-# Colours of the 70 original characters in assets/: keeps only the colours the original game has (moved, never deleted).
-#   python3 tools/colors.py            check: what would be moved
-#   python3 tools/colors.py --original moves the extra colours to assets/colors_removed/
-#   python3 tools/colors.py --undo     puts them back
+# Colours of the 70 original characters in assets/: keeps only the colours the original game has.
+#   python3 tools/colors.py            check: what would be removed
+#   python3 tools/colors.py --original removes the extra colours
 import argparse, os, shutil, struct
 
 BASE = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
@@ -77,45 +76,27 @@ def original(assets, apply):
     if not all_four(assets, rutas):
         print('colors: the original characters do not all have 4 colours; nothing to do')
         return 0
-    lst, moved = extras(assets, rutas), 0
+    lst, removed = extras(assets, rutas), 0
     for r in lst:
-        src, dst = os.path.join(assets, 'Packfile', r), os.path.join(assets, 'colors_removed', r)
+        src = os.path.join(assets, 'Packfile', r)
         if apply:
-            os.makedirs(os.path.dirname(dst), exist_ok=True)
-            shutil.move(src, dst)
-            moved += 1
+            if os.path.isdir(src):
+                shutil.rmtree(src)
+            elif os.path.isfile(src):
+                os.remove(src)
+            removed += 1
         else:
             print('  ' + r)
-    print('colors: %d extra colours %s' % (len(lst), 'moved to assets/colors_removed' if apply else 'would be moved (run with --original)'))
-    return moved
-
-
-def undo(assets):
-    rem, n = os.path.join(assets, 'colors_removed'), 0
-    for dp, dn, fn in os.walk(rem):
-        for name in list(dn) + fn:
-            if name.lower().startswith('color_'):
-                r = os.path.relpath(os.path.join(dp, name), rem)
-                dst = os.path.join(assets, 'Packfile', r)
-                if not os.path.exists(dst):
-                    os.makedirs(os.path.dirname(dst), exist_ok=True)
-                    shutil.move(os.path.join(dp, name), dst)
-                    n += 1
-        dn[:] = [d for d in dn if not d.lower().startswith('color_')]
-    shutil.rmtree(rem, ignore_errors=True)
-    print('colors: %d colours put back' % n)
+    print('colors: %d extra colours %s' % (len(lst), 'removed' if apply else 'would be removed (run with --original)'))
+    return removed
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--assets', default=os.path.join(BASE, 'assets'))
     ap.add_argument('--original', action='store_true')
-    ap.add_argument('--undo', action='store_true')
     a = ap.parse_args()
-    if a.undo:
-        undo(a.assets)
-    else:
-        original(a.assets, a.original)
+    original(a.assets, a.original)
 
 
 if __name__ == '__main__':

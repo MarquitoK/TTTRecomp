@@ -331,7 +331,7 @@ static void worker() {
     std::wstring path = (tc / "mingw64" / "bin").wstring() + L";" + (tc / "python").wstring();
     unsigned nc = std::thread::hardware_concurrency();
     std::wstring cmd = L"\"" + (tc / "python" / "python.exe").wstring() + L"\" -u \"" + (root / "tools" / "build_from_iso.py").wstring() + L"\" --iso \"" + O.iso + L"\" --root \"" +
-                       root.wstring() + L"\" --colors " + (O.all_colors ? L"all" : L"original") + L" --jobs " + std::to_wstring(nc > 2 ? nc - 1 : 1) + L" --force" + (O.unlock ? L"" : L" --no-unlock");
+                       root.wstring() + L"\" --colors " + (O.all_colors ? L"all" : L"original") + L" --jobs " + std::to_wstring(nc > 2 ? nc - 1 : 1) + L" --resume" + (O.unlock ? L"" : L" --no-unlock");
     int code = run_proc(cmd, root, path, [](const std::string& l) {
         blog(l);
         int k, n, a, b;

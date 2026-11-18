@@ -39,6 +39,7 @@ def main():
         raise SystemExit('missing game/game.iso')
     if os.path.isdir(os.path.join(assets, 'Packfile')):
         raise SystemExit('assets/Packfile already exists; move or delete assets/ first')
+    ok_mark = os.path.join(assets, '.port_assets_ok')
     for k, (name, cmd) in enumerate(STEPS, 1):
         print('== %d/%d %s' % (k, len(STEPS), name), flush=True)
         if subprocess.call([sys.executable, os.path.join(TOOLS, cmd[0])] + cmd[1:], cwd=BASE):
@@ -49,6 +50,7 @@ def main():
     index = os.path.join(assets, 'txt1.txt')
     lines = [l for l in open(index, encoding='utf-8') if not l.startswith('#')] if os.path.isfile(index) else []
     print('== done: %d txt1 in txt1.txt (%d raw), %d _txt1.bin left' % (len(lines), sum('\traw\t' in l for l in lines), sidecars))
+    open(ok_mark, 'w').close()
 
 
 if __name__ == '__main__':

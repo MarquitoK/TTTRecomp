@@ -3,7 +3,8 @@
 # The setup assistant runs it and reads the lines that start with @: "@paso K N clave", "@avance a b", "@error clave texto", "@fin".
 #   --iso PATH  --root DIR (install folder; the port's own folders are copied there when missing)  --colors all|original
 #   --until iso|juego|parches|traducir|compilar|assets  --jobs N  --no-unlock  --compare DIR (sha1 of game/ against another install)  --force
-import argparse, hashlib, os, re, shutil, struct, subprocess, sys, time
+#   --resume skips the steps already finished with the same port files and options (build_state.json)
+import argparse, hashlib, json, os, re, shutil, struct, subprocess, sys, time
 
 REPO = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 OWN = ['recompiler', 'patchers', 'games', 'runtime', 'tools']
@@ -42,6 +43,19 @@ def run(cmd, cwd, key, on_line=None):
             on_line(line)
     if p.wait():
         fail(key, (tail[-1] if tail else 'codigo %d' % p.returncode)[:300])
+
+
+def port_hash(root, opts):
+    h = hashlib.sha1(opts.encode())
+    for name in OWN:
+        for dp, dn, fn in sorted(os.walk(os.path.join(root, name))):
+            dn.sort()
+            if '__pycache__' in dp:
+                continue
+            for f in sorted(fn):
+                h.update(os.path.relpath(os.path.join(dp, f), root).replace('\\', '/').encode())
+                h.update(open(os.path.join(dp, f), 'rb').read())
+    return h.hexdigest()
 
 
 def sfo_id(d):
@@ -142,22 +156,86 @@ def main():
     ap.add_argument('--compare')
     ap.add_argument('--force', action='store_true')
     ap.add_argument('--no-unlock', action='store_true')
+    ap.add_argument('--resume', action='store_true')
     a = ap.parse_args()
     root, iso = os.path.abspath(a.root), os.path.abspath(a.iso)
     last = STEPS.index(a.until) + 1
     t0 = time.time()
     if not os.path.isfile(iso):
         fail('iso_falta', 'no existe ' + iso)
-    if os.path.exists(os.path.join(root, 'game', 'EBOOT.OLD')) and not a.force:
+    if os.path.exists(os.path.join(root, 'game', 'EBOOT.OLD')) and not a.force and not a.resume:
         fail('ya_instalado', 'ya hay un juego en %s (usa --force para reconstruirlo)' % os.path.join(root, 'game'))
     stage(root)
     py = sys.executable
+    state_path = os.path.join(root, 'build_state.json')
+    ph = port_hash(root, 'unlock=%d' % (not a.no_unlock))
+    try:
+        st = json.load(open(state_path)) if a.resume else {}
+    except Exception:
+        st = {}
+    done = st.get('done', []) if st.get('hash') == ph else []
+    chain = [True]
 
+    def skip(k, key, keys):
+        if chain[0] and all(x in done for x in keys):
+            step(k, key)
+            say('%s: ya hecho, se conserva' % key)
+            say('@avance 1 1')
+            return True
+        chain[0] = False
+        return False
+
+    def finished(key):
+        done.append(key)
+        json.dump({'hash': ph, 'done': done}, open(state_path, 'w'))
+
+    json.dump({'hash': ph, 'done': done}, open(state_path, 'w'))
+    if skip(1, 'iso', ['parches']) and skip(2, 'juego', ['parches']) and skip(3, 'parches', ['parches']):
+        pass
+    else:
+        game_and_patches(a, root, iso, py, last)
+        if last >= 3:
+            finished('parches')
+    if last <= 3:
+        return say('@fin')
+
+    if not skip(4, 'traducir', ['traducir']):
+        translate(root, py)
+        finished('traducir')
+    if last == 4:
+        return say('@fin')
+
+    if not skip(5, 'compilar', ['compilar']):
+        build(a, root)
+        finished('compilar')
+    if last == 5:
+        return say('@fin')
+
+    step(6, 'assets')
+    ok_mark = os.path.join(root, 'assets', '.port_assets_ok')
+    packfile = os.path.join(root, 'assets', 'Packfile')
+    if os.path.isdir(packfile) and (os.path.isfile(ok_mark) or not os.path.isdir(os.path.join(root, 'toolchain'))):
+        say('assets: ya existen, se conservan')
+        say('@avance 1 1')
+        say('listo en %d s' % (time.time() - t0))
+        return say('@fin')
+    if os.path.isdir(os.path.join(root, 'assets')):
+        say('assets: incompletos de un intento anterior, se rehacen')
+        shutil.rmtree(os.path.join(root, 'assets'))
+    def assets(line):
+        m = re.match(r'== (\d+)/(\d+) ', line)
+        if m:
+            say('@avance %d %s' % (int(m.group(1)) - 1, m.group(2)))
+    run([py, os.path.join(root, 'tools', 'port_assets.py'), '--colors', a.colors], root, 'assets', assets)
+    say('listo en %d s' % (time.time() - t0))
+    say('@fin')
+
+
+def game_and_patches(a, root, iso, py, last):
     step(1, 'iso')
     eboot, ovl = read_iso(iso, root)
     if last == 1:
-        return say('@fin')
-
+        return
     step(2, 'juego')
     g = os.path.join(root, 'game')
     for n in os.listdir(os.path.join(g, 'overlays')):
@@ -170,7 +248,7 @@ def main():
         open(os.path.join(g, 'overlays', n), 'wb').write(d)
     copy_iso(iso, os.path.join(g, 'game.iso'))
     if last == 2:
-        return say('@fin')
+        return
 
     step(3, 'parches')
     patches = [p for p in PATCHES if not (a.no_unlock and p[0] == 'patch_unlock.py')]
@@ -180,20 +258,18 @@ def main():
     say('@avance %d %d' % (len(patches), len(patches)))
     if a.compare:
         compare(root, os.path.abspath(a.compare))
-    if last == 3:
-        return say('@fin')
 
-    step(4, 'traducir')
+
+def translate(root, py):
     say('@avance 0 2')
     run([py, os.path.join(root, 'recompiler', 'analyzer.py'), os.path.join(root, 'game', 'EBOOT.OLD'), '--overlays', os.path.join(root, 'game', 'overlays'),
          '-o', os.path.join(root, 'generated', 'programa.json')], root, 'traducir')
     say('@avance 1 2')
     run([py, os.path.join(root, 'recompiler', 'generator.py')], root, 'traducir')
     say('@avance 2 2')
-    if last == 4:
-        return say('@fin')
 
-    step(5, 'compilar')
+
+def build(a, root):
     src = os.path.join(root, 'generated', 'src')
     total = len([n for n in os.listdir(src) if n.endswith(('.cpp', '.c'))]) + 30
     done = [0]
@@ -214,22 +290,6 @@ def main():
         if p and os.path.isfile(p):
             shutil.copy2(p, os.path.join(src, dll))
     say('@avance %d %d' % (total, total))
-    if last == 5:
-        return say('@fin')
-
-    step(6, 'assets')
-    if os.path.isdir(os.path.join(root, 'assets', 'Packfile')):
-        say('assets: ya existen, se conservan')
-        say('@avance 1 1')
-        say('listo en %d s' % (time.time() - t0))
-        return say('@fin')
-    def assets(line):
-        m = re.match(r'== (\d+)/(\d+) ', line)
-        if m:
-            say('@avance %d %s' % (int(m.group(1)) - 1, m.group(2)))
-    run([py, os.path.join(root, 'tools', 'port_assets.py'), '--colors', a.colors], root, 'assets', assets)
-    say('listo en %d s' % (time.time() - t0))
-    say('@fin')
 
 
 main()
