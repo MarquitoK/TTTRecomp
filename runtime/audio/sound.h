@@ -27,7 +27,7 @@ static int snd_block = 512, snd_queue = 6, snd_vol = 100, snd_rate_forced = 0;
 static int snd_rate = 44100;
 static int sfx_loop = 1;
 // sfx stereo: 0 original (PSP level panning), 1 3D (interaural delay and head shadow), 2 wide 3D
-int snd_3d = 1;
+int snd_3d = 0;
 
 static void snd_cfg() {
     if (snd_cfg_done) return;

@@ -56,36 +56,59 @@ static void env_migrate() {
     for (int i = 0; i < GAME_LEGACY_ENV_N; i++) { auto& r = GAME_LEGACY_ENV[i]; const char* v = getenv(r[0]); if (v && !getenv(r[1])) env_set(r[1], v); }
 }
 // graphics.cfg (Graphics window): KEY=value overriding the environment; TTT_GRAPHICS=0 ignores it
+// defaults of a new install; keys missing from an existing file are added with these values
+static const char* GRAPHICS_DEF =
+    "TTT_SCALE=1\nTTT_WINDOW=1280x720\nTTT_FILTER=2\nTTT_SHARPNESS=0.00\nTTT_MSAA=0\nTTT_FXAA=0\nTTT_TEXFILTER=0\nTTT_HIDE_CURSOR=3\n"
+    "TTT_DISCORD=1\nTTT_SKIP_CREDITS=1\n"
+    "TTT_FX_BLOOM=0\nTTT_FX_VFXMAP=0.60\nTTT_CEL_BT3FX=1\nTTT_BOLTS=0\nTTT_BT3_STORM=1\nTTT_BT3_BUBBLES=1\nTTT_BT3_HAZE=1\nTTT_FX_ATM=0\nTTT_FX_SUN=0\n"
+    "TTT_FX_MBLUR=2\nTTT_WATER=2\nTTT_RAIN=0\nTTT_WET=0\nTTT_FX_IMPACT=1\nTTT_FX_SHAKE=1\n"
+    "TTT_CEL=0\nTTT_CEL_SMOOTH=0.00\nTTT_CEL_GLOW=1\nTTT_SOFT_SHADOWS=0\nTTT_OUTLINE=2\nTTT_OUTLINE_MODE=1\nTTT_LOD=4\nTTT_DYN_COLORS=1\nTTT_TEAM_GLOW=0\nTTT_LIPSYNC=1\nTTT_BLINK=1\n"
+    "TTT_BATTLE_HUD=1\nTTT_HUD_BT3=0\nTTT_BAR_NAMES=1\nTTT_BARS_BEHIND=0\nTTT_CHARGE_LIST=1\nTTT_TR_WHEEL=1\nTTT_BT3_CAM=0\nTTT_CAM_SILHOUETTE=0\nTTT_FLOAT=1\nTTT_TRANSFORM_WAIT=2\nTTT_BLAST_END=1\nTTT_CHARGE2=0\n"
+    "TTT_GEN_RENDERS=0\nTTT_GEN_RENDERS_Q=2\nTTT_GEN_MAP_RENDERS=0\nTTT_SELECT_3D=0\nTTT_MAP_3D=0\nTTT_TEXT_NAMES=1\n"
+    "TTT_GLRAST=1\nTTT_VSYNC=0\nTTT_BATTLE_FPS=30\nTTT_SMOOTH=0\nTTT_FPS_COUNTER=0\nTTT_SND_WATER=1\n";
+// the file the first alpha wrote on its first run (480x272): replaced by the defaults above
+static const char* GRAPHICS_OLD = "TTT_SCALE=1\nTTT_WINDOW=480x272\nTTT_FILTER=2\nTTT_SHARPNESS=0.25\nTTT_OUTLINE=2\nTTT_LOD=4\nTTT_GLRAST=1\nTTT_VSYNC=0\nTTT_BATTLE_FPS=30\n";
 static void graphics_load() {
     const char* e = getenv("TTT_GRAPHICS");
     if (e && !atoi(e)) return;
     FILE* f = fopen("graphics.cfg", "r");
-    bool migrated = false;
+    bool migrated = false, reset = false;
     if (!f && (f = fopen("graficos.cfg", "r"))) migrated = true;   // old name: read once, rewritten and removed
-    if (!f && (f = fopen("graphics.cfg", "w"))) {   // defaults of the Graphics window
-        fputs("TTT_SCALE=1\nTTT_WINDOW=480x272\nTTT_FILTER=2\nTTT_SHARPNESS=0.25\nTTT_OUTLINE=2\nTTT_LOD=4\nTTT_GLRAST=1\nTTT_VSYNC=0\nTTT_BATTLE_FPS=30\n", f);
-        fclose(f);
-        f = fopen("graphics.cfg", "r");
-    }
-    if (!f) return;
+    std::string text;
+    if (f) { char b[4096]; size_t n; while ((n = fread(b, 1, sizeof(b), f)) > 0) text.append(b, n); fclose(f); }
+    text.erase(std::remove(text.begin(), text.end(), '\r'), text.end());
+    if (!f || text == GRAPHICS_OLD) { reset = f != nullptr; text = GRAPHICS_DEF; migrated = true; }
     std::string out;
-    char l[256];
-    while (fgets(l, sizeof(l), f)) {
-        char* ig = strchr(l, '=');
-        if (!ig || strncmp(l, "TTT_", 4)) continue;
-        *ig = 0;
-        char* v = ig + 1;
-        v[strcspn(v, "\r\n")] = 0;
-        const char* k = legacy_env(l);
-        env_set(k, v);
-        out += std::string(k) + "=" + v + "\n";
+    std::set<std::string> have;
+    size_t i = 0;
+    while (i < text.size()) {
+        size_t j = text.find('\n', i);
+        std::string l = text.substr(i, j == std::string::npos ? std::string::npos : j - i);
+        i = j == std::string::npos ? text.size() : j + 1;
+        size_t ig = l.find('=');
+        if (ig == std::string::npos || l.compare(0, 4, "TTT_")) continue;
+        std::string k = legacy_env(l.substr(0, ig).c_str()), v = l.substr(ig + 1);
+        env_set(k.c_str(), v.c_str());
+        have.insert(k);
+        out += k + "=" + v + "\n";
     }
-    fclose(f);
-    if (migrated) {
+    int added = 0;
+    for (std::string d = GRAPHICS_DEF; !d.empty();) {
+        size_t j = d.find('\n');
+        std::string l = d.substr(0, j);
+        d.erase(0, j + 1);
+        size_t ig = l.find('=');
+        std::string k = l.substr(0, ig);
+        if (have.count(k)) continue;
+        env_set(k.c_str(), l.substr(ig + 1).c_str());
+        out += l + "\n";
+        added++;
+    }
+    if (migrated || added) {
         FILE* w = fopen("graphics.cfg", "w");
         if (w) { fputs(out.c_str(), w); fclose(w); remove("graficos.cfg"); }
     }
-    printf("graphics: ajustes de graphics.cfg%s\n", migrated ? " (migrado desde graficos.cfg)" : "");
+    printf("graphics: ajustes de graphics.cfg%s%s, %d valores predeterminados agregados\n", !f ? " (nuevo)" : "", reset ? " (el de la primera alpha se reemplazo)" : "", added);
 }
 
 void psp_disc_warm();

@@ -2,7 +2,7 @@
 // Characters and maps window: exports or imports a part (costume, SFX, voices, map) with tools/personajes.py
 #include <shobjidl.h>
 
-enum { IDP_TYPE = 4000, IDP_LIST, IDP_PART, IDP_EXP_FOLDER, IDP_EXP_PAK, IDP_IMPORT, IDP_NOTICE, IDP_RESTART, IDP_CLOSE, IDP_TITLE, IDP_PART_LABEL, IDP_IMP_FOLDER, IDP_ZONE };
+enum { IDP_TYPE = 4000, IDP_LIST, IDP_PART, IDP_EXP_FOLDER, IDP_EXP_PAK, IDP_IMPORT, IDP_NOTICE, IDP_RESTART, IDP_CLOSE, IDP_TITLE, IDP_PART_LABEL, IDP_IMP_FOLDER, IDP_ZONE, IDP_WARN };
 struct PmUnidad { std::string type, key, nombre; std::vector<std::string> parts; };
 static HWND pm = nullptr, pm_type = nullptr, pm_list = nullptr, pm_part = nullptr, pm_notice = nullptr, pm_zone = nullptr;
 static std::vector<PmUnidad> pm_units, pm_view;
@@ -33,16 +33,17 @@ static void pm_move(int id, int x, int y, int w, int h) { MoveWindow(GetDlgItem(
 static void pm_layout() {
     RECT rc; GetClientRect(pm, &rc);
     int W = (int)(rc.right / theme_scale), H = (int)(rc.bottom / theme_scale), cx = W - 256;
-    pm_move(IDP_TITLE, 16, 14, cx - 32, 26);
-    pm_move(IDP_TYPE, 16, 50, cx - 32, 300);
-    pm_move(IDP_LIST, 16, 86, cx - 32, H - 150);
-    pm_move(IDP_PART_LABEL, cx, 52, 240, 20);
-    pm_move(IDP_PART, cx, 76, 240, 300);
-    pm_move(IDP_EXP_FOLDER, cx, 122, 240, 32);
-    pm_move(IDP_EXP_PAK, cx, 162, 240, 32);
-    pm_move(IDP_IMPORT, cx, 214, 240, 32);
-    pm_move(IDP_IMP_FOLDER, cx, 254, 240, 32);
-    pm_move(IDP_ZONE, cx, 298, 240, std::max(60, H - 298 - 64));
+    pm_move(IDP_TITLE, 16, 14, W - 32, 26);
+    pm_move(IDP_WARN, 16, 40, W - 32, 18);
+    pm_move(IDP_TYPE, 16, 68, cx - 32, 300);
+    pm_move(IDP_LIST, 16, 104, cx - 32, H - 168);
+    pm_move(IDP_PART_LABEL, cx, 70, 240, 20);
+    pm_move(IDP_PART, cx, 94, 240, 300);
+    pm_move(IDP_EXP_FOLDER, cx, 140, 240, 32);
+    pm_move(IDP_EXP_PAK, cx, 180, 240, 32);
+    pm_move(IDP_IMPORT, cx, 232, 240, 32);
+    pm_move(IDP_IMP_FOLDER, cx, 272, 240, 32);
+    pm_move(IDP_ZONE, cx, 316, 240, std::max(60, H - 316 - 64));
     pm_move(IDP_NOTICE, 16, H - 48, W - 240, 32);
     pm_move(IDP_RESTART, W - 216, H - 48, 100, 32);
     pm_move(IDP_CLOSE, W - 106, H - 48, 90, 32);
@@ -293,6 +294,10 @@ static LRESULT CALLBACK pm_proc(HWND h, UINT m, WPARAM w, LPARAM l) {
             SetBkMode((HDC)w, TRANSPARENT); SetTextColor((HDC)w, THEME_TEXT2);
             return (LRESULT)theme_b_bg;
         }
+        if (id == IDP_WARN) {
+            SetBkMode((HDC)w, TRANSPARENT); SetBkColor((HDC)w, THEME_BG); SetTextColor((HDC)w, RGB(255, 106, 90));
+            return (LRESULT)theme_b_bg;
+        }
         if (id == IDP_NOTICE || id == IDP_PART_LABEL) {
             SetBkMode((HDC)w, TRANSPARENT); SetBkColor((HDC)w, THEME_BG);
             SetTextColor((HDC)w, id == IDP_NOTICE ? THEME_ACCENT : THEME_TEXT2);
@@ -337,11 +342,12 @@ static void pm_open() {
     }
     HANDLE ctx; ULONG_PTR cookie = 0;
     visual_styles(&ctx, &cookie);
-    pm = theme_create(L"TTTRecompPersonajes", L"Characters and maps", 680, 500, WS_EX_ACCEPTFILES);
+    pm = theme_create(L"TTTRecompPersonajes", L"Characters and maps (destructive)", 680, 518, WS_EX_ACCEPTFILES);
     if (pm) {
         SetWindowLongW(pm, GWL_STYLE, GetWindowLongW(pm, GWL_STYLE) | WS_THICKFRAME | WS_MAXIMIZEBOX);
         SetWindowPos(pm, nullptr, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
-        pm_ctl(L"STATIC", L"Characters and maps", 0, IDP_TITLE, theme_f_title);
+        pm_ctl(L"STATIC", L"Characters and maps (destructive)", 0, IDP_TITLE, theme_f_title);
+        pm_ctl(L"STATIC", L"Changes are written straight into the game assets and cannot be undone. Make a copy first.", 0, IDP_WARN, theme_f_bold);
         pm_type = pm_ctl(L"COMBOBOX", L"", CBS_DROPDOWNLIST | WS_TABSTOP | WS_VSCROLL, IDP_TYPE);
         for (auto n : PM_TYPES_N) SendMessageW(pm_type, CB_ADDSTRING, 0, (LPARAM)n);
         SendMessageW(pm_type, CB_SETCURSEL, 0, 0);

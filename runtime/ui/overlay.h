@@ -41,7 +41,7 @@ struct OvRow {
     std::function<void()> act;
     std::string tag;
     bool restart = false, on = true;
-    int tag2 = 0;   // 1 experimental, 2 not recommended
+    int tag2 = 0;   // 1 experimental, 2 not recommended, 3 destructive
     int action = -1;   // RK_BIND: input action
 };
 struct OvTabName { const char* en; const char* es; };
@@ -412,6 +412,7 @@ static OvRow ov_bindrow(int a) {
 }
 static OvRow ov_exp(OvRow r) { r.tag2 = 1; return r; }
 static OvRow ov_norec(OvRow r) { r.tag2 = 2; return r; }
+static OvRow ov_destr(OvRow r) { r.tag2 = 3; return r; }
 static OvRow ov_act(const char* en, const char* es, std::string tag, std::function<void()> act, bool on = true) {
     OvRow r; r.kind = RK_ACTION; r.en = en; r.es = es; r.tag = std::move(tag); r.act = act; r.on = on;
     return r;
@@ -621,7 +622,7 @@ static std::vector<OvRow> ov_page() {
     } else if (ov_tab == 5) {
         r.push_back(ov_head("Mod tools", "Herramientas de modding"));
         r.push_back(ov_act("Create mod...", "Crear mod...", "", [] { ov_tool(3, createmod_window); }, !ov_net));
-        r.push_back(ov_act("Characters and maps...", "Personajes y mapas...", "", [] { ov_tool(4, characters_window); }, !ov_net));
+        r.push_back(ov_destr(ov_act("Characters and maps...", "Personajes y mapas...", "", [] { ov_tool(4, characters_window); }, !ov_net)));
         r.push_back(ov_act("Material editor...", "Editor de materiales...", "", [] { ov_tool(6, tpal_window); }, !ov_net));
         r.push_back(ov_act("Render editor...", "Editor de renders...", "", [] { ov_tool(5, render_editor); }, !ov_net));
         r.push_back(ov_act("Map renders...", "Renders de mapas...", "", [] { ov_tool(8, map_chooser); }, !ov_net));
@@ -715,7 +716,7 @@ static std::vector<OvRow> ov_page() {
         r.push_back(ov_head("Performance", "Rendimiento"));
         r.push_back(ov_gw("GPU rendering", "Dibujo por GPU", &g.gpu, OFF(), true));
         r.push_back(ov_norec(ov_gw("Vertical sync", "Sincronía vertical", &g.vsync, OFF(), true)));
-        r.push_back(ov_exp(ov_gw("Frame rate", "Cuadros por segundo", &g.fps, lv({{"30 (original)", "30 (original)"}, {"60", "60"}}), true)));
+        r.push_back(ov_gw("Frame rate", "Cuadros por segundo", &g.fps, lv({{"30 (original)", "30 (original)"}, {"60 (experimental)", "60 (experimental)"}}), true));
         r.push_back(ov_gw("Smooth motion", "Movimiento suave", &g.smotion, lv({{"Off", "No"}, {"On", "Sí"}, {"On (low latency)", "Sí (baja latencia)"}})));
         r.push_back(ov_gw("FPS counter", "Contador de FPS", &g.fpsc, lv({{"Off", "No"}, {"Top left", "Arriba izquierda"}, {"Top right", "Arriba derecha"}, {"Bottom left", "Abajo izquierda"}, {"Bottom right", "Abajo derecha"}})));
     }
@@ -760,7 +761,7 @@ static const OvDesc OV_DESC[] = {
     {"Outline", "Black outline around the fighters and its thickness.", "Contorno negro alrededor de los luchadores y su grosor."},
     {"Outline style", "Original changes with the distance, absolute keeps the same thickness.", "Original cambia con la distancia, absoluto mantiene el mismo grosor."},
     {"Distance quality", "Keeps the full detail models when the fighters are far away.", "Mantiene los modelos con todo su detalle cuando los luchadores están lejos."},
-    {"Colors from files", "Reads the colours of each character from its folder, mods included.", "Lee los colores de cada personaje desde su carpeta, mods incluidos."},
+    {"Colors from files", "The number of colors in the menu comes straight from the colors in the files, mods included.", "La cantidad de colores en el menú se define por la cantidad de colores en los archivos, mods incluidos."},
     {"Partner glow", "Original pulsing glow on the partner of your team.", "Brillo pulsante original sobre el compañero de tu equipo."},
     {"Lip sync", "Moves the mouth of the fighters with their voice.", "Mueve la boca de los luchadores con su voz."},
     {"Blinking", "The fighters blink from time to time.", "Los luchadores parpadean de vez en cuando."},
@@ -797,7 +798,7 @@ static const OvDesc OV_DESC[] = {
     {"Restore defaults", "Restores the default bindings of this section for the device in use.", "Restaura las asignaciones predeterminadas de esta sección para el dispositivo en uso."},
     {"Mods", "Install, enable and order the mods, and open the library.", "Instala, activa y ordena los mods, y abre la biblioteca."},
     {"Create mod...", "Builds a mod with characters, maps and files, and installs it.", "Arma un mod con personajes, mapas y archivos, y lo instala."},
-    {"Characters and maps...", "Edits the roster, the character slots and the maps.", "Edita el roster, los espacios de personajes y los mapas."},
+    {"Characters and maps...", "Destructive: edits the roster, character slots and maps directly in the game assets. It cannot be undone.", "Destructivo: edita el roster, los espacios de personajes y los mapas directamente en los assets del juego. No se puede deshacer."},
     {"Material editor...", "Edits the colours and materials of the characters.", "Edita los colores y materiales de los personajes."},
     {"Render editor...", "Edits the character renders of the menus.", "Edita los renders de personajes de los menús."},
     {"Map renders...", "Edits the map images of the stage select.", "Edita las imágenes de los mapas en la selección de escenario."},
@@ -1207,7 +1208,6 @@ static void fps_draw(int cw, int ch) {
     ov_fs = std::min(cw / 480.0f, ch / 272.0f); ov_fx = 0; ov_fy = 0;
     const float W = 40, H = 12, M = 3, VW = cw / ov_fs, VH = ch / ov_fs;
     float x = c == 1 || c == 3 ? M : VW - W - M, y = c <= 2 ? M : VH - H - M;
-    ov_quad(ov_white, x, y, W, H, 0x000000, 0.55f);
     ov_txt(0, 0.52f, std::to_string(fps_shown) + " FPS", x, y, (int)W, (int)H, 1, 0xFFFFFF);
     ov_fx = fx; ov_fy = fy; ov_fs = fs;
     glDisable(GL_BLEND);
@@ -1293,8 +1293,8 @@ static void ov_draw(int cw, int ch) {
         }
         ov_spr(on ? OP_ROW_ON : OP_ROW_OFF, lx, y, (int)lw, ov_rh(), a);
         if (on) ov_spr(OP_CURSOR, lx, y + 1, (int)lw, ov_rh() - 2, pulse * 0.6f);
-        const char* tg = it.tag2 == 1 ? "EXPERIMENTAL" : it.tag2 == 2 ? ov_s("NOT RECOMMENDED", "NO RECOMENDADO") : nullptr;
-        uint32_t tc = it.tag2 == 2 ? 0xFF5A3C : 0xFFA300;
+        const char* tg = it.tag2 == 1 ? "EXPERIMENTAL" : it.tag2 == 2 ? ov_s("NOT RECOMMENDED", "NO RECOMENDADO") : it.tag2 == 3 ? ov_s("DESTRUCTIVE", "DESTRUCTIVO") : nullptr;
+        uint32_t tc = it.tag2 >= 2 ? 0xFF5A3C : 0xFFA300;
         float tw = tg ? ceilf(psp_ui_text_w(0, 0.45f, tg)) + 8 : 0, lend = tg ? vx - tw - 10 : it.kind == RK_BIND ? lx + lw * 0.55f : it.kind == RK_ACTION && it.tag.empty() ? lx + lw - 6 : vx - 6;
         ov_txt(0, OV_TS, ov_s(it.en, it.es), lx + 12, y, (int)(lend - lx - 12), ov_rh(), 0, on ? 0xFFF379 : 0xFFFFFF, a);
         if (tg) {
