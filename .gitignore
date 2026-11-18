@@ -14,6 +14,7 @@ toolchain/
 *.exe
 *.dll
 *.part
+dist/
 
 # local data of each install
 library_cache/

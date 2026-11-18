@@ -4,6 +4,9 @@ A native Windows port of **Dragon Ball Z: Tenkaichi Tag Team** (PSP, ULUS10537),
 
 TTTRecomp is not an emulator. The game's MIPS code is translated ahead of time into C++ and compiled into a regular Windows program, with a new runtime that replaces the PSP hardware: OpenGL renderer, audio, input, saves, and networking. Because the port runs as native code, it can go far beyond the original hardware: higher resolutions, 60 fps (experimental), online play, a full mod system, and a much larger roster.
 
+> [!WARNING]
+> **TTTRecomp is in early development (alpha).** It has had limited testing so far. Expect bugs, crashes, stutters, and performance problems on some PCs, especially with the experimental options turned on. Please report anything you find in [Issues](../../issues), including your PC specs (CPU, GPU, RAM) and the steps to reproduce it.
+
 > **This repository contains no game files.** You need your own legally obtained copy of the game as an ISO. The port is built on your PC from your ISO, and nothing from the game is ever distributed here.
 
 ## Features
@@ -28,7 +31,7 @@ TTTRecomp is not an emulator. The game's MIPS code is translated ahead of time i
 
 ## Installing (players)
 
-1. Download the latest release from the [Releases](../../releases) page and unzip it.
+1. Download the latest release (`TTTRecomp-vX.Y.Z-win64.zip`) from the [Releases](../../releases) page and unzip it. Keep the `port` folder next to the setup.
 2. Run **`TTTRecomp-Setup.exe`**.
 3. Drop your ISO onto the window, or click to browse for it. The setup checks that it is the right game and version.
 4. Choose your options: character colours (all or only the originals), everything unlocked from the start, install folder, and desktop shortcut.
@@ -80,7 +83,7 @@ The pipeline:
 
 Everything generated (`game/`, `generated/`, `assets/`) stays on your machine and is ignored by git.
 
-To build the setup itself:
+To build the setup itself (or the whole release zip with `python tools/make_release.py`, which writes it to `dist/`):
 
 ```
 windres tools/setup/setup.rc -O coff -o generated/setup_res.o

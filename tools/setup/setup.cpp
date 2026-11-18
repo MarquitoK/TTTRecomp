@@ -25,7 +25,7 @@
 #include "../../runtime/gpu/image.h"
 
 namespace fs = std::filesystem;
-static const char* VERSION = "0.1.0";
+static const char* VERSION = "0.1.0-alpha";
 static const wchar_t* TC_URL = L"https://github.com/brechtsanders/winlibs_mingw/releases/download/15.2.0posix-14.0.0-ucrt-r7/winlibs-x86_64-posix-seh-gcc-15.2.0-mingw-w64ucrt-14.0.0-r7.zip";
 static const char* TC_SHA = "cb2fbad6162540cdf5e1facdce08d4dac359e8cf64f7f696a99274291763b815";
 static const wchar_t* PY_URL = L"https://www.python.org/ftp/python/3.13.17/python-3.13.17-embed-amd64.zip";
