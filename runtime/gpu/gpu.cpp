@@ -46,7 +46,7 @@ static uint32_t pal_seq_global = 0;
 static uint64_t sprites = 0, prims_other = 0, prims_3d = 0;
 static int warnings = 0;
 static uint64_t frames_drawn = 0;
-static uint64_t o2d_f = 0; static int o2d_n = 0;   // diag 84.10: textured 2D main-view draws this frame
+static int ef_now = 0;   // inside the bars-behind packet (marker 0xEF)
 
 void psp_gpu_flush();
 void psp_gpu_flush_by(int reason);
@@ -70,7 +70,7 @@ static unsigned glr_target_tex(uint32_t dir, int width, int tw, int th, int tfmt
 static void glr_report();
 static void glr_flush_queue();
 static void glr_cap_read();
-static void glr_alpha_keep(bool save);
+static void glr_alpha_keep(bool save); static void glr_bars_back(bool begin);
 static void glr_read(uint32_t dir, int width, int fmt);
 static bool glr_present(uint32_t dir);
 static unsigned glr_twin_tex(uint32_t dir, int* w, int* h);
@@ -2314,6 +2314,7 @@ struct Job {
     VP v[3];
     uint32_t col_flat;
     int x0, x1, y0, y1;
+    uint8_t back = 0;   // drawn inside the bars-behind packet
     uint8_t cls, toon, fig;   // fig: a fighter draw (marker 0xE3), toon or not: the absolute outline needs only this
     uint32_t signature;
     float lv[3];
@@ -2690,9 +2691,8 @@ static void rasterize(const VP& a0_, const VP& b0_, const VP& c0_, bool texture,
     memcpy(t.lv, toon_lv, sizeof(t.lv));
     t.tint = t.toon ? toon_tint : 0;
     t.grp = t.toon ? toon_grp : 0; t.tp = t.toon ? toon_tp : 0; t.who = (uint8_t)(t.toon || t.fig ? toon_who : 0); t.aura = (uint8_t)toon_aura; t.face = (uint8_t)(t.toon ? toon_face : 0);
-    if (in_2d && texture && fb().width >= 480 * scale_int()) { if (o2d_f != frames_drawn) { o2d_f = frames_drawn; o2d_n = 0; } o2d_n++; }   // diag 84.10
     t.d3 = !in_2d; t.vh = view_hash; memcpy(t.up, view_up, sizeof(t.up));
-    memcpy(t.vi, view_inv, sizeof(t.vi)); memcpy(t.eye, proj_eye, sizeof(t.eye)); t.sv = (uint8_t)split_now; t.wsf = (uint8_t)surf_now;
+    memcpy(t.vi, view_inv, sizeof(t.vi)); memcpy(t.eye, proj_eye, sizeof(t.eye)); t.sv = (uint8_t)split_now; t.wsf = (uint8_t)surf_now; t.back = (uint8_t)ef_now;
     t.x0 = x0; t.x1 = x1; t.y0 = y0; t.y1 = y1;
     if (!defer()) {
         uint64_t cn[5] = {0, 0, 0, 0, 0};
@@ -3028,7 +3028,7 @@ static void sprite(const Vert& a, const Vert& b, bool texture, bool cleared) {
     if (texture && t.dir >= 0x04000000u && t.dir < 0x04200000u && hits_target(t)) psp_gpu_flush_by(PC_VVRAM);
     Job tr;
     tr.fig = 0; tr.glow = 0;
-    tr.cls = 1;
+    tr.cls = 1; tr.back = (uint8_t)ef_now;
     tr.v[0].x = (float)x0; tr.v[0].y = (float)y0; tr.v[0].u = ua; tr.v[0].v = va_;
     tr.v[1].x = (float)x1; tr.v[1].y = (float)y1; tr.v[1].u = ub; tr.v[1].v = vb_;
     tr.v[2].z = b.z; tr.col_flat = b.color;
@@ -4748,7 +4748,7 @@ static bool gv_prim(const Fmt& fm, int type, int n, bool texture) {
     memcpy(t.lv, toon_lv, sizeof(t.lv));
     t.tint = tt ? toon_tint : 0; t.grp = tt ? toon_grp : 0; t.tp = tt ? toon_tp : 0; t.who = (uint8_t)(tt || tf_ ? toon_who : 0); t.aura = (uint8_t)toon_aura; t.face = (uint8_t)(tt ? toon_face : 0);
     t.d3 = 1; t.vh = view_hash; memcpy(t.up, view_up, sizeof(t.up));
-    memcpy(t.vi, view_inv, sizeof(t.vi)); memcpy(t.eye, proj_eye, sizeof(t.eye)); t.sv = (uint8_t)split_now; t.wsf = (uint8_t)surf_now;
+    memcpy(t.vi, view_inv, sizeof(t.vi)); memcpy(t.eye, proj_eye, sizeof(t.eye)); t.sv = (uint8_t)split_now; t.wsf = (uint8_t)surf_now; t.back = (uint8_t)ef_now;
     t.x0 = (int)base; t.x1 = (int)nv; t.y0 = (int)ib; t.y1 = (int)ni;
     t.st_tex = tex_state_index(e);
     qt(7);
@@ -5623,7 +5623,6 @@ static void ptcl_upto(int key);
 // BT3 EftSurf_Animate (one step per 30 Hz update) + EftSurf_DrawMeshes: scroll / wave / pulse per mesh, near fade, every triangle queued in
 // BT3's ordering table by its first vertex's depth (screen z >> 8 less zBias; layer 0 alpha blend, layer 1 additive), drawn far to near
 static void surf_draw(const LyBlk& b, uint32_t scr, uint32_t scr_end) {
-    { static int ol = 0; static uint32_t of = 0; if (ol < 8 && (uint32_t)frames_drawn - of >= 300) { ol++; of = (uint32_t)frames_drawn; printf("diag orden: superficie de agua BT3 tras %d dibujos 2D del cuadro\n", o2d_f == frames_drawn ? o2d_n : 0); } }
     if (!b.ok(0, 32) || memcmp(b.p, "BSRF", 4)) return;
     uint32_t nm = b.u(4), nt = b.u(8), total = b.u(24);
     if (!nm || nm > 4096 || !nt || nt > 32 || !total) return;
@@ -6585,6 +6584,8 @@ static void psp_gpu_cmd_(int c, uint32_t arg) {
         else if (tag == 0xEF) {   // bars behind fighters: GE state kept before the bars' packet (arg 1) and given back after it (arg 0)
             static uint32_t kR[256], kv[5]; static float kw[12], kvw[12], kp[16], kt[12], kd[20], kc[2]; static int ki[4]; static bool kset = false;
             psp_gpu_flush_by(PC_VDEST);
+            ef_now = arg & 1;
+            glr_bars_back((arg & 1) != 0);
             glr_alpha_keep((arg & 1) != 0);   // the bars use the alpha as their fill mask; the outline pass reads it after them
             if (arg & 1) {
                 memcpy(kR, R, sizeof R); memcpy(kw, m_world, sizeof kw); memcpy(kvw, m_view, sizeof kvw); memcpy(kp, m_proj, sizeof kp); memcpy(kt, m_tgen, sizeof kt);

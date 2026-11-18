@@ -1645,6 +1645,50 @@ static double fg_bb[8][5]; static bool fg_bbok[8];   // fighter screen vertex su
 static void ol_reset2() { memset(fg_bbok, 0, sizeof(fg_bbok)); memset(fg_bb, 0, sizeof(fg_bb));
     memset(ol_who, 0, sizeof(ol_who)); memset(ol_ids, 0, sizeof(ol_ids)); memset(ol_bg, 0, sizeof(ol_bg)); for (int i = 0; i < 128; i++) { ol_zr[i][0] = 1e30f; ol_zr[i][1] = 0; } }
 static uint32_t toon_fno = 0;
+// Enhanced water: the screen alpha (water mask 126, fighter ids) saved right after the mask is drawn and written back before the atmosphere reads it
+static GLuint wk_fbo = 0, wk_tex = 0, wk_prog = 0, wk_vao = 0; static int wk_w = 0, wk_h = 0; static uint32_t wk_f = 0xFFFFFFF0u;
+static void wk_save(DestGL* d) {
+    if (!wk_fbo || wk_w != d->w || wk_h != d->h) {
+        if (!wk_tex) glGenTextures(1, &wk_tex);
+        glBindTexture(GL_TEXTURE_2D, wk_tex);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, d->w, d->h, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST); glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        if (!wk_fbo) glGenFramebuffers(1, &wk_fbo);
+        glBindFramebuffer(GL_FRAMEBUFFER, wk_fbo);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, wk_tex, 0);
+        wk_w = d->w; wk_h = d->h;
+    }
+    GLboolean sc = glIsEnabled(GL_SCISSOR_TEST);
+    glDisable(GL_SCISSOR_TEST);
+    glr_resolve(d);
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, d->fbo);
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, wk_fbo);
+    glBlitFramebuffer(0, 0, d->w, d->h, 0, 0, d->w, d->h, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+    glBindFramebuffer(GL_FRAMEBUFFER, dfbo(d));
+    if (sc) glEnable(GL_SCISSOR_TEST);
+    wk_f = toon_fno;
+}
+static bool wk_put(DestGL* d) {
+    if (!patch_water_mask_keep.val || !wk_fbo || wk_w != d->w || wk_h != d->h || toon_fno - wk_f > 1u) return false;
+    if (!wk_prog) {
+        wk_prog = gl_program("#version 330 core\nvoid main(){ vec2 p = vec2((gl_VertexID & 1) * 4.0 - 1.0, (gl_VertexID >> 1) * 4.0 - 1.0); gl_Position = vec4(p, 0.0, 1.0); }\n",
+                             "#version 330 core\nuniform sampler2D src; out vec4 o; void main(){ o = texelFetch(src, ivec2(gl_FragCoord.xy), 0); }\n");
+        if (!wk_prog) { wk_prog = 0xFFFFFFFFu; return false; }
+        glGenVertexArrays(1, &wk_vao);
+    }
+    if (wk_prog == 0xFFFFFFFFu) return false;
+    glBindFramebuffer(GL_FRAMEBUFFER, dfbo(d));
+    glViewport(0, 0, d->w, d->mfbo ? d->mh : d->h);
+    glDisable(GL_SCISSOR_TEST); glDisable(GL_DEPTH_TEST); glDepthMask(GL_FALSE); glDisable(GL_BLEND); glDisable(GL_STENCIL_TEST);
+    glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_TRUE);
+    glUseProgram(wk_prog); glBindVertexArray(wk_vao);
+    glActiveTexture(GL_TEXTURE0 + 6); glBindTexture(GL_TEXTURE_2D, wk_tex); glUniform1i(glGetUniformLocation(wk_prog, "src"), 6);
+    glDrawArrays(GL_TRIANGLES, 0, 3);
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    if (d->mfbo) d->dirty = true;
+    return true;
+}
+
 // the game's outline passes (A: display alpha -> edge mask, B: mask over the screen) limited to the box of this frame's fighters
 // (TTT_OL_BOX=0 = full-screen passes as before; Pause toggles). The mask target is cleared once per frame: outside the box = no edge
 static int olb_var = -1; static float olb_x0, olb_y0, olb_x1, olb_y1; static bool olb_any = false; static long olb_n = 0, olb_full = 0; static uint32_t olb_clr_f = ~0u;
@@ -2427,12 +2471,6 @@ static void atm_pass(DestGL* d, int w, int h) {
     bool wson = (ws_on() && aw_ok && wat_stale < 30) || wenh;
     bool rson = rn_live() && aw_ok && !psp_gpu_split2();
     bool sson = !wse_p.empty() && aw_ok && !psp_gpu_split2(), cson = (chg_k > 0.0f || psp_spark_n > 0 || spk_any || spk_fn > 0) && !psp_gpu_split2();
-    {   // diag 84.10
-        int why = !at_ok ? 1 : (lv == 0 && !gon && !wson && !rson && !sson && !cson) ? 2 : !at_full ? 3 : psp_sel3d_open() ? 4 : 0;
-        static int dl = 0, dw = -1, dwe = -1, drn = -1; int we = wat_enh * 8 + psp_map_wimm * 4 + (wsf_frame > 0) * 2 + aw_ok, rr = rn_enh * 2 + (rn_fno != 0);
-        if ((why != dw || we != dwe || rr != drn) && dl < 30) { dl++; dw = why; dwe = we; drn = rr; const char* e = getenv("TTT_WATER"); const char* r = getenv("TTT_RAIN"); const char* wt = getenv("TTT_WET");
-            printf("diag atm: cuadro %u, %s, nivel %d sol %d, agua enh %d inm %d tri %d cam %d, lluvia enh %d tormenta %d (hace %d), at_ok %d at_full %d split2 %d, env agua %s lluvia %s mojado %s\n", (unsigned)toon_fno, why == 0 ? "dibuja" : why == 1 ? "sale: sin camara" : why == 2 ? "sale: nada encendido" : why == 3 ? "sale: vista chica" : "sale: vista 3D de seleccion", lv, gm, wat_enh, psp_map_wimm, wsf_frame, (int)aw_ok, rn_enh, (int)(rn_fno != 0), rn_fno ? (int)(toon_fno + 1 - rn_fno) : -1, (int)at_ok, (int)at_full, (int)psp_gpu_split2(), e ? e : "-", r ? r : "-", wt ? wt : "-"); }
-    }
     if (!at_ok || (lv == 0 && !gon && !wson && !rson && !sson && !cson) || !at_full || psp_sel3d_open()) return;
     bool conly = atb_on() && lv == 0 && !gon && !wson && !rson && !sson && !wenh && (chg_k <= 0.0f || cdk_done_f == toon_fno) && !d->mfbo;   // charge or sparking alone: the main pass only adds the flames
     if (lv == 0) at_pan[1] = at_pan[3] = 0;
@@ -2491,6 +2529,7 @@ static void atm_pass(DestGL* d, int w, int h) {
       glBlitFramebuffer(0, 0, bw, bh, 0, 0, bw, bh, GL_DEPTH_BUFFER_BIT, GL_NEAREST); }
     }
     apt_.cut(2);
+    if (wenh && wk_put(d)) { static int kl = 0; if (kl < 2) { kl++; printf("agua: mascara del agua repuesta antes del pase (%dx%d)\n", d->w, d->h); } }
     glActiveTexture(GL_TEXTURE0 + 4);
     bool atb = conly && gl_tbar();
     GLuint src = atb ? d->tex : glr_copy_fb(d);
@@ -2498,21 +2537,6 @@ static void atm_pass(DestGL* d, int w, int h) {
     glBindTexture(GL_TEXTURE_2D, src);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR); glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glActiveTexture(GL_TEXTURE0 + 6); glBindTexture(GL_TEXTURE_2D, dd ? d->dtex : at_dtex);
-    {   // diag 84.10: what the shader reads (alpha ids of the screen, depth)
-        static int rl = 0; static uint32_t rf = 0;
-        if (rl < 10 && toon_fno - rf >= 300 && (wenh || rson)) {
-            rl++; rf = toon_fno;
-            std::vector<uint8_t> px((size_t)d->w * d->h * 4); std::vector<float> zr((size_t)d->w);
-            glBindFramebuffer(GL_READ_FRAMEBUFFER, dfbo(d)); glReadPixels(0, 0, d->w, d->h, GL_RGBA, GL_UNSIGNED_BYTE, px.data());
-            glBindFramebuffer(GL_READ_FRAMEBUFFER, dd ? dfbo(d) : at_dfbo); glReadPixels(0, h / 2, d->w, 1, GL_DEPTH_COMPONENT, GL_FLOAT, zr.data());
-            glBindFramebuffer(GL_READ_FRAMEBUFFER, dfbo(d));
-            int hist[256] = {}; for (size_t k = 0; k < (size_t)d->w * d->h; k++) hist[px[4 * k + 3]]++;
-            int t1 = 0, t2 = 0, t3 = 0; for (int k = 0; k < 256; k++) { if (hist[k] > hist[t1]) { t3 = t2; t2 = t1; t1 = k; } else if (k != t1 && hist[k] > hist[t2]) { t3 = t2; t2 = k; } else if (k != t1 && k != t2 && hist[k] > hist[t3]) t3 = k; }
-            int zs = 0, z0 = 0; for (int k = 0; k < d->w; k++) { if (zr[k] >= 1.0f) zs++; else if (zr[k] <= 0.0f) z0++; }
-            printf("diag lectura: destino %dx%d (pase %dx%d, escala %d, directo %d, copia parcial %d, msaa %d), alfa 126 %d px, mas comunes %d(%d) %d(%d) %d(%d), fila de profundidad: cielo %d cero %d de %d, ids luchador %d\n",
-                   d->w, d->h, w, h, scale_int(), (int)dd, (int)glr_copy_part(), (int)(d->mfbo != 0), hist[126], t1, hist[t1], t2, hist[t2], t3, hist[t3], zs, z0, d->w, [] { int n = 0; for (int j = 0; j < 8; j++) n += __builtin_popcount((unsigned)(uint16_t)(ol_ids[j] & ~ol_bg[j])); return n; }());
-        }
-    }
     glUseProgram(at_prog);
     glBindVertexArray(at_vao);
     glDisable(GL_DEPTH_TEST); glDepthMask(GL_FALSE); glDisable(GL_BLEND); glDisable(GL_STENCIL_TEST); glStencilMask(0); glDisable(GL_SCISSOR_TEST);
@@ -3114,7 +3138,9 @@ static void toon_tune() {
     SH_R = toon_env("TTT_SHADOW_R", 2.4f); SH_BL = (int)toon_env("TTT_SHADOW_BL", 1.0f);
     TF_BIAS = toon_env("TTT_TEXBIAS", -0.5f);
 }
+static void glr_fx_late(); struct DestGL; static void fx_run(DestGL* d, int mainw, float wave);
 static void toon_frame() {
+    glr_fx_late();
     wat_frame();
     vfx_prev = vfx_cur; vfx_cur = {}; toon_ground.clear();
     map_light_frame();
@@ -4068,12 +4094,13 @@ static void glr_flush_queue() {
     } else { static int dl2 = 0; static uint32_t dlf2 = 0; if (dl2 < 6 && chg_k > 0.5f && toon_fno - dlf2 > 60 && !battle) { dl2++; dlf2 = toon_fno; printf("carga: cuadro %u con oscuridad %.2f pero sin batalla (agua estancada %d)\n", (unsigned)toon_fno, chg_k, wat_stale); } }
     uint64_t gvu0 = perf_clock();
     const bool cpe = cp_on();
+    auto wfig = [](const Job& q) { return q.toon || (patch_water_fig.val && q.fig); };   // a fighter for the water: with cel shading off the draws are fig, not toon
     if (!gv_vtx.empty()) {   // GPU vertex path: per-draw flags as the Job loop sets them, then one upload per flush
         bool gw_fs = wat_fseen, gw_ss = wat_surfseen;
         if (gw) gw_fl.assign(queue.size(), 0);
         static std::vector<float> gwd;
         auto gw_mk = [&](const Job& t, const TexState& e) -> int {
-            if (t.toon || !gw_fs || !e.blend || e.zwrite || e.cleared) return 0;
+            if (wfig(t) || !gw_fs || !e.blend || e.zwrite || e.cleared) return 0;
             bool add = ((e.bmode >> 4) & 15) == 10 && ((e.bmode >> 8) & 15) == 0 && ((e.fixed_b & 255) + ((e.fixed_b >> 8) & 255) + ((e.fixed_b >> 16) & 255)) > 384;
             if (add || t.aura) return 0;
             return wat_mesh_tex && e.t.dir == wat_mesh_tex ? 2 : 1;
@@ -4081,7 +4108,7 @@ static void glr_flush_queue() {
         auto gw_tail = [&](const Job& t, const TexState& e, float* wd, int nv, bool q, float wc, int mk) -> uint8_t {
             uint8_t fl = mk ? 8 : 0;
             if (mk == 2) { fl |= 4; if (!wc) for (int k = 0; k < nv; k++) wd[k] = -1e4f; }
-            if (!t.toon) {
+            if (!wfig(t)) {
                 bool all = q && nv > 0;
                 for (int k = 0; k < nv && all; k++) all = std::fabs(wd[k]) < WAT_TOL;
                 if (all) { fl |= 1; if (WAT_SURF > 0 && e.blend && e.zwrite && !e.cleared) fl |= 2; gw_ss = true; if (!wc) for (int k = 0; k < nv; k++) wd[k] = -1e4f; }
@@ -4094,7 +4121,7 @@ static void glr_flush_queue() {
             const Job& t = queue[qi];
             if (gw && !t.cls && t.d3 && states[t.st_tex].f.width >= mainw) {   // loose triangles: only the seen flags, in draw order
                 const TexState& e = states[t.st_tex];
-                if (t.toon) gw_fs = true;
+                if (wfig(t)) gw_fs = true;
                 else {
                     float kq[4], wd[3] = {-1e4f, -1e4f, -1e4f}; bool q = wat_k(t, kq);
                     if (q) for (int k = 0; k < 3; k++) wd[k] = WAT_SIGN * (kq[0] * t.v[k].vp[0] + kq[1] * t.v[k].vp[1] + kq[2] * t.v[k].vp[2] + kq[3] - wlv);
@@ -4111,7 +4138,7 @@ static void glr_flush_queue() {
                 float* wd = gwd.data();
                 for (int k = 0; k < t.x1; k++) { const VtxGL& g = gv_vtx[t.x0 + k]; wd[k] = q ? WAT_SIGN * (kq[0] * g.px + kq[1] * g.py + kq[2] * g.pz + kq[3] - wlv) : -1e4f; }
                 float wet = 0.0f;
-                if (t.toon) {
+                if (wfig(t)) {
                     int who = t.who < 9 ? t.who : 0;
                     wet = wat_wet[who]; gw_fs = true;
                     if (wt_enh) wet = std::max(wet, rn_wet);
@@ -4155,7 +4182,6 @@ static void glr_flush_queue() {
         glBindVertexArray(glr_vao);
     }
     uint64_t gvu1 = perf_clock(); gv_t[5] += gvu1 - gvu0;
-    int dg_fx = -1, dg_2d = 0, dg_rt = 0, dg_mn = 0; uint32_t dg_dir = 0, dg_wh = 0, dg_fdir = 0; bool dg_any = false, dg_atm = false;   // diag 84.10
     for (size_t i = 0; i < queue.size(); i++) {
         const Job& t = queue[i];
         CpJob cpj_(t.cls);
@@ -4170,9 +4196,7 @@ static void glr_flush_queue() {
         gfxw_now = won && wat_mode == 2 && psp_map_gfxw && wat_cam[0];
         float wave = won && wat_mode != 2 && wat_cam[0] ? WAT_WAVE : 0.0f;
         bool fx_any = gfxw_now || wave > 0 || fx.rush > 0 || fx.dash > 0 || fx.imode || fx.ab > 0 || fx.lines > 0 || (FX_BLOOM > 0 && FX_BLOOMK > 0) || g3_any || atm_on();
-        bool fx_here = fx_any && battle && !wat_done && !wat_split && !t.d3 && wat_3d && e0.texture && !rt && e0.f.width >= mainw && main_now();   // first 2D draw after the scene and the outline (those read the screen): HUD
-        if (battle && wat_3d && !t.d3 && e0.texture && e0.f.width >= mainw) { if (rt) dg_rt++; else if (!main_now()) dg_mn++; else if (i < last3d && !dg_2d++) { dg_dir = e0.t.dir; dg_wh = (uint32_t)e0.t.w << 16 | (uint32_t)e0.t.h; } }
-        dg_any |= fx_any; dg_atm |= atm_on();
+        bool fx_here = fx_any && battle && !wat_done && !wat_split && !t.d3 && wat_3d && e0.texture && !rt && e0.f.width >= mainw && main_now() && !(patch_fx_after_back.val && t.back);   // first 2D draw after the scene and the outline (those read the screen): HUD
         if (fx_here && i < last3d) {   // a 2D draw in the middle of the scene (sprite effects, LOD point clouds): wait for the last 3D job
             fx_here = false; static int pe = 0, pf = -1;
             if (pe < 6 && (int)toon_fno != pf) { pe++; pf = (int)toon_fno; size_t n3 = 0; for (size_t k = i; k < last3d; k++) n3 += queue[k].d3; printf("fx: dibujo 2D 0x%08X %dx%d en medio de la escena, quedan %u trabajos 3D: los efectos esperan\n", e0.t.dir, e0.t.w, e0.t.h, (unsigned)n3); }
@@ -4191,8 +4215,7 @@ static void glr_flush_queue() {
             if (pl < 4) { pl++; printf("fx: efectos de pantalla antes del dibujo 2D con textura 0x%08X %dx%d\n", e0.t.dir, e0.t.w, e0.t.h); }
             tpk(7);
             glr_draw_batch();
-            dg_fx = (int)i; dg_fdir = e0.t.dir;
-            { PERF_SUB("pase efectos/atm"); wat_pass(glr_current, 0, 0, mainw, 272 * scale_int(), wave); }
+            { PERF_SUB("pase efectos/atm"); fx_run(glr_current, mainw, wave); }
             st_prev = 0xFFFFFFFFu;
             tpk(1);
         }
@@ -4200,7 +4223,7 @@ static void glr_flush_queue() {
             static int sdl = 0; static uint32_t sdf = 0;
             if (sdl < 6 && toon_fno - sdf > 90) { sdl++; sdf = toon_fno; printf("suave: dibujo 2D %u de %u en el cuadro %u: batalla %d, escena 3D %d, tras el ultimo 3D %d, lee un destino %d, dividido %d, textura %d, efectos de pantalla %d hechos %d\n", (unsigned)i, (unsigned)queue.size(), (unsigned)toon_fno, (int)battle, (int)wat_3d, (int)(i >= last3d), (int)rt, (int)wat_split, (int)e0.texture, (int)fx_any, (int)wat_done); }
         }
-        if (sm_on && sm_scn_f != toon_fno && battle && !t.d3 && wat_3d && i >= last3d && !rt && !wat_split && e0.texture && (wat_done || !fx_any) && e0.f.width >= mainw) {
+        if (sm_on && sm_scn_f != toon_fno && battle && !t.d3 && !(patch_fx_after_back.val && t.back) && wat_3d && i >= last3d && !rt && !wat_split && e0.texture && (wat_done || !fx_any) && e0.f.width >= mainw) {
             DestGL* sd = glr_find(e0.f.dir, e0.f.width, e0.f.fmt);
             if (sd->width >= mainw) { tpk(7); glr_draw_batch(); sm_scene_copy(sd); st_prev = 0xFFFFFFFFu; tpk(2); }
         }
@@ -4260,7 +4283,7 @@ static void glr_flush_queue() {
             float wy[3] = {0, 0, 0};
             if (q)
                 for (int k = 0; k < 3; k++) { wy[k] = kq[0] * t.v[k].vp[0] + kq[1] * t.v[k].vp[1] + kq[2] * t.v[k].vp[2] + kq[3]; wd[k] = WAT_SIGN * (wy[k] - wlv); }
-            if (!t.toon && wat_fseen && e.blend && !e.zwrite && !e.cleared) {
+            if (!wfig(t) && wat_fseen && e.blend && !e.zwrite && !e.cleared) {
                 bool add = ((e.bmode >> 4) & 15) == 10 && ((e.bmode >> 8) & 15) == 0 && ((e.fixed_b & 255) + ((e.fixed_b >> 8) & 255) + ((e.fixed_b >> 16) & 255)) > 384;
                 if (!add && !t.aura) {
                     int k = 0; while (k < wat_mk && wat_mt[k] != e.t.dir) k++;
@@ -4271,7 +4294,7 @@ static void glr_flush_queue() {
                     if (m && !wc) wd[0] = wd[1] = wd[2] = -1e4f;
                 }
             }
-            if (t.toon) {
+            if (wfig(t)) {
                 int who = t.who < 9 ? t.who : 0;
                 wet = wat_wet[who]; wat_fseen = true;
                 if (wt_enh) wet = std::max(wet, rn_wet);
@@ -4298,12 +4321,12 @@ static void glr_flush_queue() {
                 wat_surfseen = true; issurf = true;
                 if (!wc) wd[0] = wd[1] = wd[2] = -1e4f;
             }
-            if (!t.toon && !wat_surfseen && !wc) wd[0] = wd[1] = wd[2] = -1e4f;   // map drawn before the surface: its blend already shows the water
+            if (!wfig(t) && !wat_surfseen && !wc) wd[0] = wd[1] = wd[2] = -1e4f;   // map drawn before the surface: its blend already shows the water
             if (wat_mode == 2 && t.sv < 8 && wat_cam[t.sv]) wd[0] = wd[1] = wd[2] = -1e4f;   // BT3: under water only GfxWater tints the screen
         }
         if (gw && t.cls == 2 && i < gw_fl.size() && (gw_fl[i] & 16)) {   // GPU path prim with water: depth already per vertex, the draw state here
             uint8_t fl = gw_fl[i];
-            if (t.toon) wat_fseen = true;
+            if (wfig(t)) wat_fseen = true;
             if (fl & 1) { wat_surfseen = true; issurf = true; surf = (fl & 2) != 0; }
             mesh = (fl & 4) && WAT_MESH > 0 && wat_bg >= 0;
             if (fl & 8) {
@@ -4499,13 +4522,10 @@ static void glr_flush_queue() {
             }
         }
     }
-    {   // diag 84.10
-        static int dl = 0; static uint32_t df = 0;
-        if (battle && wat_3d && dl < 40 && toon_fno - df >= 300) { dl++; df = toon_fno; printf("diag fx: cuadro %u, %u trabajos, ultimo 3D %u, efectos en %d (antes de 0x%08X), fx_any %d atm_on %d, agua %d enh %d inm %d, hechos %d, dividido %d, 2D antes del ultimo 3D %d (primero 0x%08X %ux%u), leen destino %d, otra vista %d\n", (unsigned)toon_fno, (unsigned)queue.size(), (unsigned)last3d, dg_fx, dg_fdir, (int)dg_any, (int)dg_atm, wat_mode, wat_enh, psp_map_wimm, (int)wat_done, (int)wat_split, dg_2d, dg_dir, dg_wh >> 16, dg_wh & 0xFFFFu, dg_rt, dg_mn); }
-    }
     uint64_t gvu2 = perf_clock(); gv_t[6] += gvu2 - gvu1;
     glr_draw_batch();
     gv_t[7] += perf_clock() - gvu2;
+    bool wk_now = (!glr_wvtx.empty() && wst >= 0) || !gw_mask.empty();
     if (!glr_wvtx.empty() && wst >= 0) {   // water mask: the BT3 surfaces again, alpha only, id 0x7E (depth tested, no writes)
         glr_state(states[wst]);
         glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_TRUE); glDisable(GL_BLEND); glDepthMask(GL_FALSE); glDisable(GL_STENCIL_TEST);
@@ -4531,9 +4551,86 @@ static void glr_flush_queue() {
         ol_bg[0x7E >> 4] |= (uint16_t)(1u << (0x7E & 15));
         gw_mask.clear();
     }
+    if (wk_now && patch_water_mask_keep.val && glr_current && glr_current->width >= mainw) { wk_save(glr_current); glUseProgram(glr_prog); glBindVertexArray(glr_vao); }
     glr_wvtx.clear();
     gv_vtx.clear(); gv_idx.clear(); gv_x.clear(); gv_agv.clear();
     gv_tn_fit();
+}
+
+// bars behind the fighters: screen before (0) and after (1) the bars' packet, and before the screen effects (2); after the effects the
+// pixels where the bars changed the screen and nothing covered them since are put back, so the effects never tint the HUD
+static GLuint bk_tex[4] = {0, 0, 0, 0}, bk_fbo[4] = {0, 0, 0, 0}, bk_prog = 0, bk_vao = 0; static int bk_w = 0, bk_h = 0; static bool bk_ok = false; static DestGL* bk_d = nullptr;
+static void bk_grab(DestGL* d, int k) {
+    if (bk_w != d->w || bk_h != d->h) {
+        for (int i = 0; i < 4; i++) {
+            if (!bk_tex[i]) { glGenTextures(1, &bk_tex[i]); glGenFramebuffers(1, &bk_fbo[i]); }
+            glBindTexture(GL_TEXTURE_2D, bk_tex[i]);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, d->w, d->h, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST); glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+            glBindFramebuffer(GL_FRAMEBUFFER, bk_fbo[i]);
+            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, bk_tex[i], 0);
+        }
+        bk_w = d->w; bk_h = d->h;
+    }
+    GLboolean sc = glIsEnabled(GL_SCISSOR_TEST);
+    glDisable(GL_SCISSOR_TEST);
+    glr_resolve(d);
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, d->fbo);
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, bk_fbo[k]);
+    glBlitFramebuffer(0, 0, d->w, d->h, 0, 0, d->w, d->h, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+    glBindFramebuffer(GL_FRAMEBUFFER, dfbo(d));
+    if (sc) glEnable(GL_SCISSOR_TEST);
+}
+static void glr_bars_back(bool begin) {
+    DestGL* d = glr_current;
+    if (!patch_fx_keep_bars.val || !d || d->width < 480 * scale_int()) { bk_ok = false; return; }
+    if (begin) { bk_grab(d, 0); bk_ok = false; return; }
+    bk_grab(d, 1); bk_ok = true; bk_d = d;
+}
+static void bk_restore(DestGL* d) {
+    if (!bk_prog) {
+        bk_prog = gl_program("#version 330 core\nvoid main(){ vec2 p = vec2((gl_VertexID & 1) * 4.0 - 1.0, (gl_VertexID >> 1) * 4.0 - 1.0); gl_Position = vec4(p, 0.0, 1.0); }\n",
+                             "#version 330 core\nuniform sampler2D a; uniform sampler2D b; uniform sampler2D p; uniform sampler2D e; out vec4 o;\n"
+                             "void main(){ ivec2 q = ivec2(gl_FragCoord.xy); vec3 A = texelFetch(a, q, 0).rgb, P = texelFetch(p, q, 0).rgb, E = texelFetch(e, q, 0).rgb; vec4 B = texelFetch(b, q, 0);\n"
+                             "  if(any(greaterThan(abs(A - B.rgb), vec3(0.5/255.0))) && all(lessThan(abs(P - B.rgb), vec3(0.5/255.0)))) o = vec4(mix(E, P, B.a), 1.0); else discard; }\n");   // translucent bar pixels: the effect shows through by the bar's own alpha
+        if (!bk_prog) { bk_prog = 0xFFFFFFFFu; return; }
+        glGenVertexArrays(1, &bk_vao);
+    }
+    if (bk_prog == 0xFFFFFFFFu) return;
+    glBindFramebuffer(GL_FRAMEBUFFER, dfbo(d));
+    glViewport(0, 0, d->w, d->mfbo ? d->mh : d->h);
+    glDisable(GL_SCISSOR_TEST); glDisable(GL_DEPTH_TEST); glDepthMask(GL_FALSE); glDisable(GL_BLEND); glDisable(GL_STENCIL_TEST);
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_FALSE);
+    glUseProgram(bk_prog); glBindVertexArray(bk_vao);
+    const char* nm[4] = {"a", "b", "p", "e"};
+    for (int i = 0; i < 4; i++) { glActiveTexture(GL_TEXTURE0 + 6 + i); glBindTexture(GL_TEXTURE_2D, bk_tex[i]); glUniform1i(glGetUniformLocation(bk_prog, nm[i]), 6 + i); }
+    glDrawArrays(GL_TRIANGLES, 0, 3);
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    glActiveTexture(GL_TEXTURE0);
+    if (d->mfbo) d->dirty = true;
+    static int ll = 0; if (ll < 2) { ll++; printf("hud: barras detras protegidas de los efectos de pantalla (%dx%d)\n", d->w, d->h); }
+}
+static void fx_run(DestGL* d, int mainw, float wave) {
+    bool bk = bk_ok && bk_d == d && d && bk_w == d->w && bk_h == d->h;
+    if (bk) bk_grab(d, 2);
+    wat_pass(d, 0, 0, mainw, 272 * scale_int(), wave);
+    if (bk) { bk_grab(d, 3); bk_restore(d); }
+    bk_ok = false;
+    glActiveTexture(GL_TEXTURE0); glUseProgram(glr_prog); glBindVertexArray(glr_vao);
+    if (glr_current) glBindFramebuffer(GL_FRAMEBUFFER, dfbo(glr_current));
+}
+
+// end of the frame with no HUD draw after the scene (every bar behind the fighters, HUD hidden): the screen effects run here
+static void glr_fx_late() {
+    struct BkEnd { ~BkEnd() { bk_ok = false; } } bk_end_;
+    DestGL* d = glr_current; int mainw = 480 * scale_int();
+    if (!patch_fx_late.val || !d || d->width < mainw || wat_stale >= 30 || wat_done || !wat_3d || wat_split) return;
+    bool won = wat_on();
+    gfxw_now = won && wat_mode == 2 && psp_map_gfxw && wat_cam[0];
+    float wave = won && wat_mode != 2 && wat_cam[0] ? WAT_WAVE : 0.0f;
+    bool fx_any = gfxw_now || wave > 0 || fx.rush > 0 || fx.dash > 0 || fx.imode || fx.ab > 0 || fx.lines > 0 || (FX_BLOOM > 0 && FX_BLOOMK > 0) || g3_any || atm_on();
+    if (!fx_any) return;
+    fx_run(d, mainw, wave);
 }
 
 // read back into guest VRAM: captures only
@@ -4985,6 +5082,7 @@ static void glr_dump(const TexState& e) {
 static void glr_flush_queue() {}
 static void glr_cap_read() {}
 static void glr_alpha_keep(bool) {}
+static void glr_bars_back(bool) {}
 static void glr_read(uint32_t, int, int) {}
 static void glr_blank(uint32_t) {}
 static bool glr_peek(uint32_t, int, std::vector<uint32_t>&, int*, int*) { return false; }
