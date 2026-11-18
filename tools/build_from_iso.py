@@ -205,6 +205,7 @@ def main():
         if last >= 3:
             st['parches'] = hp
             save()
+    clean_backups(root)
     if last <= 3:
         return say('@fin')
 
@@ -263,6 +264,21 @@ def main():
     save()
     say('listo en %d s' % (time.time() - t0))
     say('@fin')
+
+
+# copies the patchers keep to undo themselves: the build always starts again from the ISO, so they are not needed
+BACKUPS = ('.borde', '.desbloqueo', '.limites', '.roster', '.nombre', '.inicio')
+
+
+def clean_backups(root):
+    n = 0
+    for d in (os.path.join(root, 'game'), os.path.join(root, 'game', 'overlays')):
+        for f in os.listdir(d) if os.path.isdir(d) else []:
+            if f.endswith(BACKUPS):
+                os.remove(os.path.join(d, f))
+                n += 1
+    if n:
+        say('juego: %d copias de respaldo de los parches borradas' % n)
 
 
 def game_and_patches(a, root, iso, py, last):
