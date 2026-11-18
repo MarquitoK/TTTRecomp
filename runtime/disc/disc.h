@@ -750,6 +750,22 @@ static bool is_file(const std::string& fpath, uint64_t* sz = nullptr) {
 // damaged colour pak (item 30): the colour's container key + "#dmg", 1_p entries 2..16 from its 1_p_dmg folder
 static bool dmg_key(const std::string& key) { return key.size() > 4 && key.compare(key.size() - 4, 4, "#dmg") == 0; }
 static std::string dmg_strip(const std::string& key) { size_t p = key.find("#dmg"); return p == std::string::npos ? key : key.substr(0, p) + key.substr(p + 4); }
+// character or map mod: any file under Maps/, or a non-texture file (or a damaged texture) in a character colour folder
+static bool mod_is_game(const std::string& pk) {
+    std::error_code ec;
+    for (auto it = std::filesystem::recursive_directory_iterator(std::filesystem::u8path(pk), ec); !ec && it != std::filesystem::recursive_directory_iterator(); it.increment(ec)) {
+        if (!it->is_regular_file(ec)) continue;
+        std::string k = lower(std::filesystem::relative(it->path(), std::filesystem::u8path(pk), ec).generic_u8string());
+        bool map = !k.compare(0, 5, "maps/");
+        if (!map && (k.compare(0, 11, "characters/") || k.find("/color_") == std::string::npos)) continue;
+        size_t d = k.find_last_of('.');
+        std::string ext = d == std::string::npos ? "" : k.substr(d + 1);
+        bool tex = ext == "png" || ext == "atex" || ext == "ctex" || ext == "dbt" || ext == "rhg" || ext == "dds" || ext == "tga" || ext == "bmp";
+        if (map || !tex || k.find("_dmg") != std::string::npos) return true;
+    }
+    return false;
+}
+
 static bool mod_touches(const std::string& key) { return mod_enabled && mod_dirs.count(lower(dmg_strip(key))) > 0; }
 
 // mods made before the AT3 rename: x_m_.wav stands for x.unk when assets already use the new name
@@ -1483,6 +1499,9 @@ static void mods_init() {
         if (ends_with(r, ".pak")) mod_entries.insert(r.substr(0, r.size() - 4));
     }
     int active_list = 0;
+    if (const char* sk = getenv("TTT_MODS_SKIP"))   // tests: "cosmetic" loads only the character and map mods of this instance
+        for (auto& m : list)
+            if (m.enabled && !strcmp(sk, "cosmetic") && !mod_is_game(root_d + "/" + m.id + "/Packfile")) { m.enabled = false; printf("mods: %s omitido en esta instancia (estetico)\n", m.id.c_str()); }
     for (auto& m : list) {
         if (!m.enabled) continue;
         auto ver = m.data_.find("version");

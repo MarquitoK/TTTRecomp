@@ -87,10 +87,11 @@ static std::string net_mods_txt;
 static std::map<uint64_t, uint64_t> net_peer_sig;
 static std::map<uint64_t, std::string> net_peer_mods;
 
-static uint64_t net_rank_sig = 0;
-static uint64_t net_sig() { return net_online_ranked() ? net_rank_sig : net_mods_sig; }   // ranked rooms compare only gameplay mods
-// rooms and LAN: exactly the host's mods; ranked: nobody with character or map mods (character textures allowed)
-static bool net_sig_ok(uint64_t peer) { return net_online_ranked() ? peer == 0 && net_rank_sig == 0 : peer == net_mods_sig; }
+static uint64_t net_rank_sig = 0, net_game_sig = 0;
+static std::string net_game_txt;
+// rooms and LAN: the same character and map mods as the host (cosmetic ones are free); ranked: nobody with character or map mods
+static uint64_t net_sig() { return net_online_ranked() ? net_rank_sig : net_game_sig; }
+static bool net_sig_ok(uint64_t peer) { return net_online_ranked() ? peer == 0 && net_rank_sig == 0 : peer == net_game_sig; }
 static void net_mods_init() {
     static bool done = false;
     if (done) return;
@@ -107,6 +108,7 @@ static void net_mods_init() {
     uint64_t g = 1469598103934665603ull;
     unsigned gn = 0;
     std::string first;
+    std::set<std::string> owners;
     for (auto& f : mod_files) {
         std::string k = f.first;
         if (!k.compare(0, 9, "packfile/")) k = k.substr(9);
@@ -119,13 +121,20 @@ static void net_mods_init() {
         if (first.empty()) first = k;
         for (char ch : k) g = (g ^ (uint8_t)ch) * 1099511628211ull;
         gn++;
+        for (auto& m : mod_active)
+            if (f.second.find("/" + m.first + "/") != std::string::npos) { owners.insert(m.first); break; }
     }
     net_rank_sig = gn ? (g ? g : 1) : 0;
+    for (auto& m : mod_active) if (owners.count(m.first)) net_game_txt += m.first + "\t" + m.second + "\n";
+    uint64_t c = g;
+    for (char ch : net_game_txt) c = (c ^ (uint8_t)ch) * 1099511628211ull;
+    net_game_sig = gn ? (c ? c : 1) : 0;
     net_online_set_rank_mods(net_rank_sig);
     printf("net: %u archivos de mods cambian personajes o mapas (clasificatoria %s%s%s)\n", gn, gn ? "bloqueada, primero " : "permitida", first.c_str(), "");
     double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
-    printf("net: %d mods activos, firma %016llX (%u archivos, %.0f ms)\n", (int)mod_active.size(), (unsigned long long)net_mods_sig, (unsigned)mod_files.size(), ms);
-    net_online_set_mods(net_mods_sig);
+    printf("net: %d mods activos, firma %016llX (%u archivos, %.0f ms); de personajes o mapas: %d, firma %016llX\n", (int)mod_active.size(), (unsigned long long)net_mods_sig,
+           (unsigned)mod_files.size(), ms, (int)owners.size(), (unsigned long long)net_game_sig);
+    net_online_set_mods(net_game_sig);
 }
 void psp_net_mods_ensure() { net_mods_init(); }
 
@@ -144,11 +153,11 @@ static std::vector<std::pair<std::string, std::string>> net_mods_parse(const std
 static void net_mods_refused(uint64_t host) {
     if (net_online_ranked()) {
         printf("net: union rechazada en clasificatoria (propia %016llX)\n", (unsigned long long)net_rank_sig);
-        psp_net_notice("You can't play ranked with these mods.\n\nRanked only allows mods that change character textures. Mods that change or add characters, damaged costumes or maps are not allowed.\n\nTurn them off in Tools > Mods and restart the game.", "", "", "", 3);
+        psp_net_notice("You can't play ranked with these mods.\n\nRanked only allows mods that change character textures. Mods that change or add characters, damaged costumes or maps are not allowed.\n\nTurn them off in F1 > Mods and restart the game.", "", "", "", 3);
         return;
     }
     uint64_t hs = net_peer_sig.count(host) ? net_peer_sig[host] : 0;
-    auto mine = net_mods_parse(net_mods_txt);
+    auto mine = net_mods_parse(net_game_txt);
     auto his = net_mods_parse(hs && net_peer_mods.count(host) ? net_peer_mods[host] : std::string());
     std::string missing, extra, version;
     auto add = [](std::string& s, const std::string& x) { s += (s.empty() ? "" : ", ") + x; };
@@ -158,14 +167,14 @@ static void net_mods_refused(uint64_t host) {
         if (!found) add(missing, a.first);
     }
     for (auto& b : mine) { bool found = false; for (auto& a : his) if (a.first == b.first) found = true; if (!found) add(extra, b.first); }
-    std::string m = "You can't join this room: your mods don't match the host's.\n";
-    if (hs && !net_peer_mods.count(host)) m += "\nThe host uses mods.";
+    std::string m = "You can't join this room: your character and map mods don't match the host's.\n";
+    if (hs && !net_peer_mods.count(host)) m += "\nThe host uses character or map mods.";
     if (!missing.empty()) m += "\nMissing: " + missing;
     if (!extra.empty()) m += "\nNot used by the host: " + extra;
     if (!version.empty()) m += "\nDifferent version: " + version;
     if (missing.empty() && extra.empty() && version.empty() && (!hs || net_peer_mods.count(host))) m += "\nThe mod order or files are different.";
-    m += "\n\nUse exactly the host's mods, in the same order (Tools > Mods), and restart the game.";
-    printf("net: union rechazada por mods (propia %016llX, anfitrion %016llX)\n", (unsigned long long)net_mods_sig, (unsigned long long)hs);
+    m += "\n\nUse the host's character and map mods, in the same order, and restart the game.";
+    printf("net: union rechazada por mods de personajes o mapas (propia %016llX, anfitrion %016llX)\n", (unsigned long long)net_game_sig, (unsigned long long)hs);
     int kind = hs && !net_peer_mods.count(host) ? 1 : missing.empty() && extra.empty() && version.empty() ? 2 : 0;
     psp_net_notice(m.c_str(), missing.c_str(), extra.c_str(), version.c_str(), kind);
 }
@@ -449,7 +458,7 @@ static void net_pump() {
     if (mt.alive && mt.active && mt.mode == 1 && t - mt.last >= mt.hello_us / 1000) {
         mt.last = t;
         net_send(P_HELLO, nullptr, mt.port, 0, mt.opt.data(), (int)mt.opt.size());
-        if (net_sig()) net_send(P_MODS, nullptr, mt.port, 0, (const uint8_t*)net_mods_txt.data(), (int)net_mods_txt.size());
+        if (net_sig()) net_send(P_MODS, nullptr, mt.port, 0, (const uint8_t*)net_game_txt.data(), (int)net_game_txt.size());
     }
     if (mt.alive && mt.active && mt.mode != 1) {
         for (auto it = mt.peers.begin(); it != mt.peers.end();) {

@@ -717,6 +717,7 @@ static std::vector<OvRow> ov_page() {
         r.push_back(ov_norec(ov_gw("Vertical sync", "Sincronía vertical", &g.vsync, OFF(), true)));
         r.push_back(ov_exp(ov_gw("Frame rate", "Cuadros por segundo", &g.fps, lv({{"30 (original)", "30 (original)"}, {"60", "60"}}), true)));
         r.push_back(ov_gw("Smooth motion", "Movimiento suave", &g.smotion, lv({{"Off", "No"}, {"On", "Sí"}, {"On (low latency)", "Sí (baja latencia)"}})));
+        r.push_back(ov_gw("FPS counter", "Contador de FPS", &g.fpsc, lv({{"Off", "No"}, {"Top left", "Arriba izquierda"}, {"Top right", "Arriba derecha"}, {"Bottom left", "Abajo izquierda"}, {"Bottom right", "Abajo derecha"}})));
     }
     return r;
 }
@@ -785,6 +786,7 @@ static const OvDesc OV_DESC[] = {
     {"Names as text", "Draws the names in the select screens as text instead of pictures.", "Dibuja los nombres en las pantallas de selección como texto en lugar de imágenes."},
     {"GPU rendering", "Draws the game with the graphics card. Needed by most effects.", "Dibuja el juego con la tarjeta gráfica. La necesitan la mayoría de los efectos."},
     {"Vertical sync", "Syncs the image with the monitor to avoid tearing. Not recommended: it still shows problems.", "Sincroniza la imagen con el monitor para evitar cortes. No recomendado: aún presenta problemas."},
+    {"FPS counter", "Shows the frames per second in a corner of the screen.", "Muestra los cuadros por segundo en una esquina de la pantalla."},
     {"Frame rate", "60 makes the game smoother. Experimental: some actions may still behave differently.", "60 hace el juego más fluido. Experimental: algunas acciones aún pueden comportarse distinto."},
     {"Smooth motion", "Interpolates the movement between frames. Low latency answers faster.", "Interpola el movimiento entre cuadros. Baja latencia responde más rápido."},
     {"Sound", "Original stereo or 3D stereo that places the sounds around you.", "Estéreo original o estéreo 3D que ubica los sonidos a tu alrededor."},
@@ -1167,18 +1169,15 @@ static float ov_prompt(uint32_t code, const char* label, float x, float y) {
     return x - 10;
 }
 
-static void ov_draw(int cw, int ch) {
-    if (!ov_open) return;
+static bool ov_gl_begin(int cw, int ch) {
     if (!ov_prog) {
         ov_prog = gl_program(OV_VS, OV_FS);
-        if (!ov_prog) return;
+        if (!ov_prog) return false;
         ov_u_r = glGetUniformLocation(ov_prog, "r"); ov_u_k = glGetUniformLocation(ov_prog, "k");
         OvImg w; w.w = w.h = 1; w.px.assign(1, 0xFFFFFFFFu);
         ov_white = ov_upload(w).t;
     }
     ov_cw = cw; ov_ch = ch;
-    ov_fs = std::min(cw / 480.0f, ch / 272.0f);
-    ov_fx = (cw - 480 * ov_fs) * 0.5f; ov_fy = (ch - 272 * ov_fs) * 0.5f;
     glViewport(0, 0, cw, ch);
     glEnable(GL_BLEND);
     glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
@@ -1186,6 +1185,39 @@ static void ov_draw(int cw, int ch) {
     glActiveTexture(GL_TEXTURE0);
     glUniform1i(glGetUniformLocation(ov_prog, "t"), 0);
     glBindVertexArray(vao_gl);
+    return true;
+}
+
+// FPS counter (Graphics > Performance): frames shown in the main window per second, refreshed every 0.5 s, in the chosen corner
+static int fps_shown = 0, fps_n = 0, fps_corner = -1;
+static LARGE_INTEGER fps_t0 = {};
+static void fps_draw(int cw, int ch) {
+    LARGE_INTEGER t, f;
+    QueryPerformanceCounter(&t); QueryPerformanceFrequency(&f);
+    if (!fps_t0.QuadPart) fps_t0 = t;
+    fps_n++;
+    double s = (double)(t.QuadPart - fps_t0.QuadPart) / f.QuadPart;
+    if (s >= 0.5) {
+        fps_shown = (int)(fps_n / s + 0.5); fps_n = 0; fps_t0 = t;
+    }
+    if (fps_corner < 0) fps_corner = std::max(0, std::min(4, gw_env("TTT_FPS_COUNTER", 0)));
+    int c = gw_loaded ? gw_v.fpsc : fps_corner;
+    if (c <= 0 || !fps_shown || !ov_gl_begin(cw, ch)) return;
+    float fx = ov_fx, fy = ov_fy, fs = ov_fs;
+    ov_fs = std::min(cw / 480.0f, ch / 272.0f); ov_fx = 0; ov_fy = 0;
+    const float W = 40, H = 12, M = 3, VW = cw / ov_fs, VH = ch / ov_fs;
+    float x = c == 1 || c == 3 ? M : VW - W - M, y = c <= 2 ? M : VH - H - M;
+    ov_quad(ov_white, x, y, W, H, 0x000000, 0.55f);
+    ov_txt(0, 0.52f, std::to_string(fps_shown) + " FPS", x, y, (int)W, (int)H, 1, 0xFFFFFF);
+    ov_fx = fx; ov_fy = fy; ov_fs = fs;
+    glDisable(GL_BLEND);
+}
+
+static void ov_draw(int cw, int ch) {
+    if (!ov_open) return;
+    if (!ov_gl_begin(cw, ch)) return;
+    ov_fs = std::min(cw / 480.0f, ch / 272.0f);
+    ov_fx = (cw - 480 * ov_fs) * 0.5f; ov_fy = (ch - 272 * ov_fs) * 0.5f;
     { float fx = ov_fx, fy = ov_fy, fs = ov_fs; ov_fx = 0; ov_fy = 0; ov_fs = 1; ov_quad(ov_white, 0, 0, (float)cw, (float)ch, 0x002757, 0.65f); ov_fx = fx; ov_fy = fy; ov_fs = fs; }
     ov_spr(OP_PANEL, OV_PX, OV_PY, OV_PW, OV_PH);
     ov_spr(OP_TITLE, OV_PX + 6, OV_PY + 5, 180, 16);

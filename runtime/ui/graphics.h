@@ -10,11 +10,11 @@ static const int GW_MSAA[] = {0, 0, 2, 4, 8, 4}, GW_FXAA[] = {0, 1, 0, 0, 0, 1};
 static const int GW_CURSOR_S[] = {0, 1, 3, 5, 10};
 static const int GW_WATER_V[] = {0, 2, 1, 3};   // TTT_WATER: 0 off, 1 full (the old on), 2 BT3, 3 enhanced (BT3 + water shader)
 
-struct GwValues { int size, scale, filter, sharpness, outline, lod, gpu, vsync, fps, floating, bars, charge, discord, names, soft, cel, bolts, water, smooth, bloom, vfxmap, olmode, msaa, texf, mblur, lip, blink, dyncol, sel3d, genr, genq, skipcr, trwait, blastend, glow, camsil, bt3fx, atm, sun, cursor, hud, barsback, bt3cam, trwheel, map3d, genm, textn, celglow, sndw, storm, bubbles, haze, rain, wet, chg2, smotion, impact; };
+struct GwValues { int size, scale, filter, sharpness, outline, lod, gpu, vsync, fps, floating, bars, charge, discord, names, soft, cel, bolts, water, smooth, bloom, vfxmap, olmode, msaa, texf, mblur, lip, blink, dyncol, sel3d, genr, genq, skipcr, trwait, blastend, glow, camsil, bt3fx, atm, sun, cursor, hud, barsback, bt3cam, trwheel, map3d, genm, textn, celglow, sndw, storm, bubbles, haze, rain, wet, chg2, smotion, impact, fpsc; };
 static GwValues gw_v, gw_start, gw_prev;
 static bool gw_loaded = false;   // gw_start read once (this window or the settings menu)
 static int gw_prev_fit = 2; static bool gw_prev_fullscreen = false;
-static const GwValues GW_DEFAULT = {0, 1, 2, 1, 2, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 1, 3, 2, 2, 1, 1, 1, 0, 0, 1, 0, 3, 1, 0, 0, 1, 1, 1, 2, 1, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 2};
+static const GwValues GW_DEFAULT = {0, 1, 2, 1, 2, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 1, 3, 2, 2, 1, 1, 1, 0, 0, 1, 0, 3, 1, 0, 0, 1, 1, 1, 2, 1, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 2, 0};
 static std::string gw_size_other;
 
 static int gw_env(const char* k, int def) { const char* e = getenv(k); return e && *e ? atoi(e) : def; }
@@ -90,6 +90,7 @@ static void gw_read() {
     gw_v.wet = gw_env("TTT_WET", 1) != 0;
     gw_v.chg2 = gw_env("TTT_CHARGE2", 0) != 0;
     gw_v.smotion = std::min(2, std::max(0, gw_env("TTT_SMOOTH", 0)));
+    gw_v.fpsc = std::min(4, std::max(0, gw_env("TTT_FPS_COUNTER", 0)));
     { int im = gw_env("TTT_FX_IMPACT", 1), sk = gw_env("TTT_FX_SHAKE", 1); gw_v.impact = im >= 2 ? 3 : im == 1 ? 2 : sk ? 1 : 0; }
 }
 
@@ -162,7 +163,8 @@ static void gw_save() {
     fprintf(f, "TTT_RAIN=%d\nTTT_WET=%d\nTTT_CHARGE2=%d\n", gw_v.rain, gw_v.wet, gw_v.chg2);
     _putenv_s("TTT_CHARGE2", gw_v.chg2 ? "1" : "0");
     _putenv_s("TTT_RAIN", gw_v.rain ? "1" : "0"); _putenv_s("TTT_WET", gw_v.wet ? "1" : "0");
-    fprintf(f, "TTT_SMOOTH=%d\n", gw_v.smotion);
+    fprintf(f, "TTT_SMOOTH=%d\nTTT_FPS_COUNTER=%d\n", gw_v.smotion, gw_v.fpsc);
+    _putenv_s("TTT_FPS_COUNTER", std::to_string(gw_v.fpsc).c_str());
     _putenv_s("TTT_SMOOTH", gw_v.smotion == 2 ? "2" : gw_v.smotion ? "1" : "0");
     {   // Impact effects: Off, Shake, Lines + shake, Flash frames + shake
         const char* im = gw_v.impact == 3 ? "2" : gw_v.impact == 2 ? "1" : "0";

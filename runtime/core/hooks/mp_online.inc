@@ -90,7 +90,7 @@ static const char* mo_t(int id, uint32_t lang) {
         {"The room is full.", "La sala est\u00E1 llena."},
         {"Room uses another version.", "La sala usa otra versi\u00F3n."},
         {"Could not reach the host.", "No se pudo unir al anfitri\u00F3n."},
-        {"That room uses other mods.", "Esa sala usa otros mods."},
+        {"That room uses other character or map mods.", "Esa sala usa otros mods de personajes o mapas."},
         {"Session expired. Sign in again.", "Sesi\u00F3n caducada. Entra otra vez."},
         {"Name other players will see.", "Nombre que ver\u00E1n los dem\u00E1s jugadores."},
         {"Maximum number of players.", "N\u00FAmero m\u00E1ximo de jugadores."},

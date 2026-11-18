@@ -154,7 +154,11 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
     CloseHandle(pi.hThread);
 
     // log: game output (and that of its restarts) with optional time since launch
-    FILE* reg = _wfopen(absoluta(registro).c_str(), L"wb");
+    std::wstring reg_path = absoluta(registro), reg_prev = reg_path;
+    size_t dot = reg_prev.find_last_of(L'.');
+    reg_prev.insert(dot == std::wstring::npos || dot < reg_prev.find_last_of(L"\\/") + 1 ? reg_prev.size() : dot, L"_previous");
+    MoveFileExW(reg_path.c_str(), reg_prev.c_str(), MOVEFILE_REPLACE_EXISTING);
+    FILE* reg = _wfopen(reg_path.c_str(), L"wb");
     if (reg) {
         fprintf(reg, "launcher: %ls\n", cmd.c_str());
         for (auto& v : vars) fprintf(reg, "launcher: %ls\n", v.c_str());

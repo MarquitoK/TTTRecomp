@@ -1113,14 +1113,14 @@ void psp_net_notice(const char* full, const char* missing, const char* extra, co
 
 static void mpn_build(uint32_t lang) {
     static const char* T[2][7] = {
-        {"Your mods don't match the host's.", "Missing: ", "Not used by the host: ", "Different version: ", "The host uses mods.",
-         "The mod order or files differ.", "Use the host's mods in the same order (Tools > Mods) and restart."},
-        {"Tus mods no son los del anfitri\u00F3n.", "Faltan: ", "El anfitri\u00F3n no usa: ", "Otra versi\u00F3n: ", "El anfitri\u00F3n usa mods.",
-         "El orden o los archivos difieren.", "Usa sus mods en el mismo orden (Tools > Mods) y reinicia."}
+        {"Character/map mods differ from the host's.", "Missing: ", "Not used by the host: ", "Different version: ", "The host uses them.",
+         "The order or files differ.", "Use the host's character/map mods in the same order and restart."},
+        {"Tus mods de personajes/mapas no coinciden.", "Faltan: ", "El anfitri\u00F3n no usa: ", "Otra versi\u00F3n: ", "El anfitri\u00F3n s\u00ED los usa.",
+         "El orden o los archivos difieren.", "Usa sus mods de personajes/mapas en el mismo orden y reinicia."}
     };
     const char* const* t = T[mpm_li(lang)];
-    static const char* R[2][2] = {{"Ranked allows cosmetic mods only.", "Turn the others off (Tools > Mods)."},
-                                  {"En clasificatoria solo se permiten mods est\u00E9ticos.", "Desactiva los dem\u00E1s (Tools > Mods)."}};
+    static const char* R[2][2] = {{"Ranked allows cosmetic mods only.", "Turn the others off (F1 > Mods)."},
+                                  {"En clasificatoria solo se permiten mods est\u00E9ticos.", "Desactiva los dem\u00E1s (F1 > Mods)."}};
     std::string m = mpn_kind == 3 ? R[mpm_li(lang)][0] : t[0];
     if (mpn_kind == 3) {}
     else if (mpn_kind == 1) m += std::string(" ") + t[4];

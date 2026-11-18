@@ -228,6 +228,7 @@ static bool gl_recursos() {
 
 static void osk_dibujar(int dx, int dy, int dw, int dh);
 static void ov_draw(int cw, int ch);
+static void fps_draw(int cw, int ch);
 static int busy_now();
 static void busy_dibujar(int dx, int dy, int dw, int dh);
 
@@ -330,6 +331,7 @@ static void dibujar_tramo(int cw, int ch, GLuint fuente, float t0, float t1, boo
     glDrawArrays(GL_TRIANGLES, 0, 3);
     if (busy) busy_dibujar(dx, dy, dw, dh);
     if (osk) osk_dibujar(dx, dy, dw, dh);
+    if (osk) fps_draw(cw, ch);
     if (osk) ov_draw(cw, ch);
 }
 
