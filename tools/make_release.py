@@ -13,19 +13,33 @@ def version():
     return re.search(r'VERSION = "([^"]+)"', s).group(1)
 
 
-def build_setup(out):
+def find_bin(extra):
+    home = os.path.expanduser('~')
+    dirs = ([extra] if extra else []) + [None, r'C:\msys64\ucrt64\bin', r'C:\msys64\mingw64\bin', r'C:\mingw64\bin',
+                                        os.path.join(home, 'Games', 'TTTRecomp', 'toolchain', 'mingw64', 'bin')]
+    for d in dirs:
+        g = shutil.which('g++', path=d) if d else shutil.which('g++')
+        w = shutil.which('windres', path=d) if d else shutil.which('windres')
+        if g and w:
+            return os.path.dirname(g)
+    sys.exit('no encuentro g++ y windres; usa --gcc "C:\\ruta\\a\\mingw64\\bin"')
+
+
+def build_setup(out, bindir):
+    env = dict(os.environ, PATH=bindir + os.pathsep + os.environ.get('PATH', ''))
     gen = os.path.join(REPO, 'generated')
     os.makedirs(gen, exist_ok=True)
     res = os.path.join(gen, 'setup_res.o')
-    subprocess.run(['windres', os.path.join('tools', 'setup', 'setup.rc'), '-O', 'coff', '-o', res], cwd=REPO, check=True)
+    subprocess.run([os.path.join(bindir, 'windres'), os.path.join('tools', 'setup', 'setup.rc'), '-O', 'coff', '-o', res], cwd=REPO, check=True, env=env)
     libs = ['-lopengl32', '-lglu32', '-lgdi32', '-lwinhttp', '-lbcrypt', '-lole32', '-luuid', '-lshell32', '-lcomdlg32']
-    subprocess.run(['g++', '-O2', '-std=c++17', '-municode', '-mwindows', '-static', '-s', '-o', out,
-                    os.path.join('tools', 'setup', 'setup.cpp'), res, *libs], cwd=REPO, check=True)
+    subprocess.run([os.path.join(bindir, 'g++'), '-O2', '-std=c++17', '-municode', '-mwindows', '-static', '-s', '-o', out,
+                    os.path.join('tools', 'setup', 'setup.cpp'), res, *libs], cwd=REPO, check=True, env=env)
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--setup', help='use this TTTRecomp-Setup.exe instead of compiling it')
+    ap.add_argument('--gcc', help='folder with g++ and windres')
     ap.add_argument('--dirty', action='store_true', help='allow uncommitted changes')
     a = ap.parse_args()
     if git('status', '--porcelain').strip() and not a.dirty:
@@ -45,8 +59,9 @@ def main():
     if a.setup:
         shutil.copyfile(a.setup, exe)
     else:
-        print('compilando el asistente...')
-        build_setup(exe)
+        bindir = find_bin(a.gcc)
+        print('compilando el asistente con ' + bindir)
+        build_setup(exe, bindir)
 
     out = os.path.join(dist, 'TTTRecomp-v%s-win64.zip' % ver)
     with zipfile.ZipFile(out, 'w', zipfile.ZIP_DEFLATED, compresslevel=9) as z:
