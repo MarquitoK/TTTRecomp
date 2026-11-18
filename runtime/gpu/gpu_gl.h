@@ -1976,7 +1976,7 @@ static float spk_f[8], spk_c[8][3], spk_p[8][6], spk_a[8][4]; static bool spk_an
 struct SpkFlame { float ox, oy, t, v, age, life, sw; int slot, id; }; static SpkFlame spk_fl[48]; static int spk_fn = 0; static float spk_gpu[48][4];   // flame emitter: world particles, screen rows for the shader
    // flame fade per slot, last aura colour, feet/centre world, screen centre/half height/radius
 static bool rn_live() { return rn_enh && rn_fno && toon_fno + 1 - rn_fno <= 2u; }
-static bool atm_on() { return (at_level() > 0 || ws_on() || rn_live() || psp_spark_n > 0 || spk_any || spk_fn > 0 || psp_charge_dark || chg_k > 0.0f || (at_glare() > 0 && psp_map_glare[6] && at_on_flag(psp_map_glare[0]))); }
+static bool atm_on() { return (at_level() > 0 || ws_on() || (wat_enh && psp_map_wimm) || rn_live() || psp_spark_n > 0 || spk_any || spk_fn > 0 || psp_charge_dark || chg_k > 0.0f || (at_glare() > 0 && psp_map_glare[6] && at_on_flag(psp_map_glare[0]))); }
 static const char* ATM_FS =
     "#version 330 core\n"
     "uniform sampler2D src; uniform sampler2D dep; uniform sampler2D aux; uniform sampler2D ray; uniform sampler2D st; uniform sampler2D hal;\n"

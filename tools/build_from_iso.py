@@ -229,7 +229,7 @@ def main():
     try:
         aver = int(open(ok_mark).read().strip() or 1)
     except Exception:
-        aver = 0
+        aver = 1 if os.path.isfile(os.path.join(root, 'assets', 'shared.txt')) else 0   # finished before the marker existed: shared.txt is the last step's
     dev = not os.path.isdir(os.path.join(root, 'toolchain'))   # his own work folder: assets are his, never redone here
     if os.path.isdir(packfile) and (dev or aver >= ASSETS_VERSION):
         if aver and st.get('assets') != ha:

@@ -55,6 +55,10 @@ static int ov_subs_t[OV_NTABS];
 static bool ov_open = false, ov_net = false, ov_hold = false;
 static int ov_tab = 0, ov_sub = 0, ov_row = 0, ov_confirm = 0, ov_yes = 0, ov_lang_boot = 0;   // ov_row: rows.size() restart button; confirm 2 quit, 4 restart needed
 static float ov_scroll = 0;
+// where the menu was left: it opens there again during this session
+static bool ov_mem = false;
+static int ov_mem_tab = 0, ov_mem_sub = 0, ov_mem_row = 0, ov_mem_subs[OV_NTABS];
+static float ov_mem_scroll = 0;
 static bool ov_mods_changed = false;
 static bool ov_queued[2];
 static uint32_t ov_prev = 0;
@@ -950,7 +954,12 @@ static void ov_begin(bool net) {
     ov_gw_ready();
     gw_bars_list();
     ov_open = true; ov_net = net; ov_confirm = 0; ov_sub = 0; ov_cap = -1; memset(ov_subs_t, 0, sizeof(ov_subs_t)); ov_mods_read = false; ov_mmove = ov_mdrag = ov_opts = -1; ov_queued[0] = ov_queued[1] = false;
-    ov_tab_set(0);
+    if (ov_mem && ov_mem_tab >= 0 && ov_mem_tab < OV_NTABS) {
+        memcpy(ov_subs_t, ov_mem_subs, sizeof(ov_subs_t));
+        ov_tab = ov_mem_tab; ov_sub = ov_mem_sub;
+        auto rows = ov_page();
+        ov_row = std::max(0, std::min(ov_mem_row, (int)rows.size())); ov_scroll = ov_mem_scroll;
+    } else ov_tab_set(0);
     if (ov_pend) { auto f = ov_pend; ov_pend = nullptr; ov_tab_set(4); ov_sub_set(0); ov_mods_load(); f(); }
     ov_prev = ov_buttons(); ov_dev = ov_im_prev = input_mode; ov_pad_prev = true; ov_kprev = 15; ov_rs_prev = 2; ov_combo_prev = true; ov_f1_prev = true; ov_lb_prev = ov_rb_prev = true; ov_t0 = GetTickCount(); ov_hover = -2;
     InterlockedExchange(&wheel_acc, 0);
@@ -1215,6 +1224,7 @@ static void fps_draw(int cw, int ch) {
 
 static void ov_draw(int cw, int ch) {
     if (!ov_open) return;
+    if (!ov_confirm) { ov_mem = true; ov_mem_tab = ov_tab; ov_mem_sub = ov_sub; ov_mem_row = ov_row; ov_mem_scroll = ov_scroll; memcpy(ov_mem_subs, ov_subs_t, sizeof(ov_mem_subs)); ov_mem_subs[ov_tab] = ov_sub; }
     if (!ov_gl_begin(cw, ch)) return;
     ov_fs = std::min(cw / 480.0f, ch / 272.0f);
     ov_fx = (cw - 480 * ov_fs) * 0.5f; ov_fy = (ch - 272 * ov_fs) * 0.5f;

@@ -7,6 +7,7 @@
 #endif
 #include <windows.h>
 #include <shlobj.h>
+#include <shobjidl.h>
 #include <shellapi.h>
 #include <commdlg.h>
 #include <winhttp.h>
@@ -578,15 +579,30 @@ static std::wstring pick_iso() {
     of.Flags = OFN_FILEMUSTEXIST | OFN_HIDEREADONLY | OFN_NOCHANGEDIR;
     return GetOpenFileNameW(&of) ? fn : L"";
 }
-static void pick_folder() {
-    BROWSEINFOW bi; memset(&bi, 0, sizeof(bi));
-    bi.hwndOwner = win; bi.ulFlags = BIF_RETURNONLYFSDIRS | BIF_NEWDIALOGSTYLE;
-    std::wstring title = wd(T("Install folder", "Carpeta de instalación")); bi.lpszTitle = title.c_str();
-    if (PIDLIST_ABSOLUTE p = SHBrowseForFolderW(&bi)) {
-        wchar_t b[MAX_PATH];
-        if (SHGetPathFromIDListW(p, b)) O.root = fs::path(b) / "TTTRecomp";
-        CoTaskMemFree(p);
+static void pick_folder() {   // the standard Windows folder picker
+    CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+    IFileOpenDialog* d = nullptr;
+    if (FAILED(CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER, IID_IFileOpenDialog, (void**)&d))) return;
+    DWORD o = 0; d->GetOptions(&o); d->SetOptions(o | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST);
+    std::wstring title = wd(T("Install folder", "Carpeta de instalación"));
+    d->SetTitle(title.c_str());
+    IShellItem* start = nullptr;
+    fs::path cur = O.root.parent_path();
+    while (!cur.empty() && !fs::exists(cur)) cur = cur.parent_path();
+    if (!cur.empty() && SUCCEEDED(SHCreateItemFromParsingName(cur.wstring().c_str(), nullptr, IID_IShellItem, (void**)&start))) { d->SetFolder(start); start->Release(); }
+    if (SUCCEEDED(d->Show(win))) {
+        IShellItem* it = nullptr;
+        if (SUCCEEDED(d->GetResult(&it))) {
+            PWSTR p = nullptr;
+            if (SUCCEEDED(it->GetDisplayName(SIGDN_FILESYSPATH, &p))) {
+                fs::path f = p;
+                O.root = f.filename() == "TTTRecomp" ? f : f / "TTTRecomp";
+                CoTaskMemFree(p);
+            }
+            it->Release();
+        }
     }
+    d->Release();
 }
 static void set_iso(const std::wstring& p) { O.iso = p; iso = iso_check(p); }
 static uint64_t free_space(const fs::path& p) {
