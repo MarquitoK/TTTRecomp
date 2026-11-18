@@ -1,0 +1,12 @@
+# row (22 px rows of the map names atlas 08_map_names_bg.rhg/02, row 10 = Random) | en | es
+0 | Wasteland | Yermo
+1 | Rocky Area | Zona rocosa
+2 | Island | Isla
+3 | City Ruins | Ciudad en ruinas
+4 | Planet Namek (Land) | Planeta Namek (tierra)
+5 | Planet Namek (Village) | Planeta Namek (aldea)
+6 | Planet Namek Destroyed | Planeta Namek destruido
+7 | Mountain Road | Carretera montañosa
+8 | Cell Games Arena | Estadio de Juegos de Célula
+9 | Supreme Kai's World | Mundo de Kaiyoshin
+10 | Random | Aleatorio

@@ -1,0 +1,136 @@
+# [path pattern (relative to assets, * = anything) context: any menu battle story play]
+# mode x y w h button [margin]    (game pixels; modes: icon glyph cover text; button: psp name, direction or @action; button?held=X?follow=Y: alternates, X/Y = button, held, none; keep = original; arrow_up..arrow_right = plain arrow; bg = glyph background for the device)
+
+[*buttons.atex/02.png play]
+icon 0 2 30 10 start
+[*buttons.atex/03.png play]
+icon 0 2 30 10 select
+[*buttons.atex/04.png play]
+icon 0 0 14 14 cir
+[*buttons.atex/05.png play]
+icon 0 0 14 14 squ
+[*buttons.atex/06.png play]
+icon 0 0 14 14 tri
+[*buttons.atex/07.png play]
+icon 0 0 14 14 cro
+[*buttons.atex/08.png play]
+icon 0 0 14 14 l
+[*buttons.atex/09.png play]
+icon 0 0 14 14 r
+[*buttons.atex/10.png play]
+icon 0 0 12 14 stick
+[*buttons.atex/11.png play]
+icon 0 0 24 14 stick_up
+[*buttons.atex/12.png play]
+icon 0 0 24 14 stick_down
+[*buttons.atex/13.png play]
+icon 0 0 27 12 stick_right
+[*buttons.atex/14.png play]
+icon 0 0 27 12 stick_left
+[*buttons.atex/15.png play]
+icon 0 0 15 14 cir
+icon 16 0 15 14 cir
+[*buttons.atex/16.png play]
+icon 0 0 15 14 squ
+icon 16 0 15 14 squ
+[*buttons.atex/17.png play]
+icon 0 0 15 14 tri
+icon 16 0 15 14 tri
+[*buttons.atex/18.png play]
+icon 0 0 15 14 cro
+icon 16 0 15 14 cro
+[*buttons.atex/19.png play]
+icon 0 3 14 11 squ 0
+[*buttons.atex/20.png play]
+icon 0 3 14 11 tri 0
+[*buttons.atex/21.png play]
+icon 0 0 15 14 up
+[*buttons.atex/22.png play]
+icon 0 0 15 14 down
+[*buttons.atex/23.png play]
+icon 0 0 15 14 right
+[*buttons.atex/24.png play]
+icon 0 0 15 14 left
+
+[*navbar_viewer*navbar.rhg/02.png any]
+icon 0 0 16 16 cr_form
+icon 16 0 16 16 cir
+icon 32 0 16 16 cro
+icon 48 0 16 16 squ
+icon 0 16 16 16 dpad
+icon 16 16 16 16 cr_lr
+icon 32 16 16 16 cr_ud
+icon 48 16 16 16 cr_stick
+icon 0 34 31 10 select
+icon 32 35 13 8 cr_zout
+icon 46 35 13 8 cr_zin
+icon 0 45 31 10 start
+
+[*navbar.rhg/02.png any]
+icon 0 0 16 16 tri
+icon 16 0 16 16 cir
+icon 32 0 16 16 cro
+icon 48 0 16 16 squ
+icon 0 16 16 16 dpad
+icon 16 16 16 16 dpad_lr
+icon 32 16 16 16 dpad_ud
+icon 48 16 16 16 stick
+icon 0 34 31 10 select
+icon 32 35 13 8 l
+icon 46 35 13 8 r
+icon 0 45 31 10 start
+
+[*001_char_stats.pak/02_stats_bg.rhg.png menu]
+icon 1 41 15 9 l
+icon 24 40 16 11 l
+icon 1 53 15 9 r
+icon 24 52 16 11 r
+
+[*149_buttons.rhg/01.png battle]
+icon 1 22 15 16 arrow_up?follow=none 0
+icon 17 22 15 16 arrow_down?follow=none 0
+icon 33 22 16 16 arrow_left?follow=none 0
+icon 49 22 15 16 arrow_right?follow=none 0
+glyph 0 38 12 12 cir?held=held
+glyph 12 38 12 12 cro
+glyph 24 38 12 12 squ?follow=none?held=held
+glyph 36 38 12 12 tri?held=held
+glyph 48 38 8 12 r
+glyph 56 38 8 12 l
+icon 0 0 21 22 keep?follow=none 0
+icon 21 0 21 22 bg?follow=@battle_charge 0
+icon 43 0 21 22 bg?follow=@battle_charge 0
+icon 0 50 64 14 keep?follow=none 0
+[*149_buttons.rhg/03.png battle]
+icon 0 0 256 256 keep?follow=none 0
+
+[*080_partner_hud.rhg/01.png battle]
+icon 0 34 39 9 select
+[*080_partner_hud.rhg/03.png battle]
+icon 2 42 32 11 select
+icon 37 42 11 11 tri
+icon 51 42 11 11 cro
+
+[*clash_hud_1.rhg.png battle]
+icon 0 57 24 24 @battle_blast
+icon 24 57 24 24 @battle_blast
+
+[*press_x_anim.rhg.png story]
+icon 3 3 26 26 cro
+icon 35 4 26 26 cro
+
+[*press_start_en.rhg.png menu]
+text 88 4 75 21 @menu_accept 4
+[*press_start_es.rhg.png menu]
+text 175 4 76 21 @menu_accept 4
+
+[*tutorial_21.rhg.png battle]
+cover 118 60 15 15 cro
+[*tutorial_22.rhg.png battle]
+cover 118 60 15 15 tri
+[*tutorial_23.rhg.png battle]
+cover 100 62 44 13 select
+
+[*chapter_select_header.rhg/01.png menu]
+cover 42 7 17 17 l
+cover 117 7 17 17 r

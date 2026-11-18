@@ -1,0 +1,60 @@
+// Online play API (net/online.cpp), used by the network layer and the En linea menus
+#pragma once
+#include <cstdint>
+
+struct OnRoomInfo { char id[8]; char name[40]; char host[24]; char mods[20]; int n, max, mode, cust, rank; };
+struct OnRankRow { char name[24]; int pos, elo, w, l; };
+struct OnMatch { int st, s, win, n, grp, back, host, team, ord, np, mode, fmt, map, full, rn, nteam[2]; char mid[20], room[8], why[16], names[4][24]; };
+enum { MMS_IDLE, MMS_WAIT, MMS_MATCH, MMS_ERROR };
+struct OnGroup { int st, lead, n; char code[8], names[2][24]; };
+enum { MG_NONE, MG_OK, MG_BUSY, MG_ERROR };
+enum { OS_IDLE, OS_BUSY, OS_HOSTING, OS_CONNECTED, OS_FAILED };
+enum { OA_NONE, OA_BUSY, OA_OK, OA_ERROR, OA_EXPIRED, OA_CANCEL };
+enum { AK_NONE, AK_OFFLINE, AK_ACCOUNT };
+
+bool net_online_on();
+void net_online_start();
+void net_online_send(const void* d, int n);
+int net_online_recv(void* d, int max);
+void net_online_set_mods(uint64_t sig);
+const char* net_online_mods();
+void net_online_set_rank_mods(uint64_t sig);
+const char* net_online_rank_mods();
+const char* net_online_account();
+int net_online_account_state();
+void net_account_boot();
+int net_account_kind();
+const char* net_account_name();
+int net_account_state();
+void net_account_offline(const char* name);
+void net_account_logout();
+void net_account_delete();
+void net_account_steam_login();
+void net_account_steam_cancel();
+void net_online_refresh();
+int net_online_rooms(OnRoomInfo* out, int max, int* state);
+void net_online_host(const char* name, const char* pw, int max, int pub);
+void net_online_set_game_mode(int m, int cust);
+bool net_online_joined(OnRoomInfo* out);
+void net_online_set_players(int n);
+void net_online_join(const char* id, const char* pw);
+int net_online_status(int* err, char* id);
+void net_online_stop();
+bool net_online_ranked();
+int net_online_rank_mode();
+int net_online_rank_free(int res, int team, int np);
+int net_online_rank_surv(int waves, int np);
+void net_online_ranking_refresh(int board);
+void net_online_host_mm(const char* mid, int np, int surv);
+void net_mm_queue(int surv, int fmt);
+void net_mm_follow();
+void net_mm_cancel();
+int net_mm_state(OnMatch* out);
+void net_mm_group(int op, const char* code);
+int net_mm_group_state(OnGroup* out);
+int net_online_ranking(int board, OnRankRow* out, int max, int* state, OnRankRow* me);
+void net_discord_enable(bool on);
+int net_discord_state();
+void net_discord_presence(const char* details, const char* state, const char* room, int n, int max);
+void net_avatar_room(int members);
+int net_avatar(const char* name, uint8_t* rgba);

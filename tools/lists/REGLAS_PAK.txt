@@ -1,0 +1,35 @@
+*_battle_config.pak @10 = battle_config
+Story_Mode/Characters_SFX/*.pak = !
+Story_Mode/Minimaps/*.pak = !
+Menus/*.vagp @12 = sfx_batt_100
+# patron [@cantidad] = plantilla. Gana la primera que coincida.
+# Sin regla, se usa la plantilla que tenga esa misma cantidad de entradas, si solo hay una.
+# Anidados: los VFX quedan cerrados (cantidad variable); camaras y effect_common se abren.
+*/0?_skill_00?.pak = !
+*/*_charge_aura.pak = !
+*/*_kidan.pak = !
+*/0?_unused.pak = !
+*/*_ki_wave.pak = !
+*/*_energy_wave.pak = !
+*/*_jetpack.pak = !
+*/*_absorb.pak = !
+*.vagp @97 = sfx_ch
+*.vagp @85 = sfx_bt
+*.vagp @11 = sfx_batt_100
+*.vagp @10 = sfx_map
+*.vagp @9 = sfx_system
+*/*_skill_cameras.pak @4 = cman
+*/*_effect_common.pak @11 = effect_common
+Characters/*/color_*.pak @497 = ttt_char
+Characters/*/*/color_*.pak @497 = ttt_char
+Story_Mode/HUDs/*.pak @4 = sm_hud
+Story_Mode/Chapters/*/In_Map_Dialogues/*.pak @7 = sm_dialogues
+Story_Mode/Chapters/*/*.pak @7 = sm_title
+Menus/Customize/*.pak @37 = customize
+Menus/*.pak @37 = score
+Menus/*.pak @12 = install
+Menus/*.pak @2 = dp_bg
+Story_Mode/UI/*game_over*.pak @2 = game_over
+*.pak @2 = sfx
+*.pak @4 = cman
+*.pak @7 = sm_title

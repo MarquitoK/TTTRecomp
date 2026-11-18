@@ -1,0 +1,7 @@
+1-1: 01_title.ags
+2-2: 02_empty.dat
+3-3: 03_title_en.rhg
+4-4: 04_title_es.rhg
+5-5: 05_title_fr.rhg
+6-6: 06_empty.dat
+7-7: 07_empty.dat

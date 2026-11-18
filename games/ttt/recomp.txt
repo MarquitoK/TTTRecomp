@@ -1,0 +1,248 @@
+# Game-specific input of recompiler/generator.py; a change here needs generator.py + make
+# guest functions replaced by a native hook on entry (psp_hook): load_overlay, save manager, bones, name screens
+[hooks]
+0x089C34E8 0x08839204 0x0883963C 0x08839268 0x0883956C 0x08839618
+0x089B29EC 0x08A8A074 0x08A8BCE4 0x08A2F7CC 0x08A3B28C 0x089B1A58
+0x089D8148 0x089D82A0
+0x0883A5A4 0x0883A6E8 0x0883A430  # music stop, fade, play (log)
+
+# EBOOT functions wrapped by psp_wrap (core/hooks/wrappers60.inc)
+[wrappers]
+0x08946110 0x0894660C 0x08946658  # homing dash, gravity, vertical flight
+0x08901E10 0x08901ECC             # task-tree walkers
+0x089CFA54                        # phase timer
+0x089D839C                        # power-up prompt show (BT3 HUD message 4 replaces it)
+0x089D1788 0x089DADDC             # UI counter readers
+0x08944A48                        # facing turn
+0x089056BC                        # round clock
+0x089B1A58                        # animation events
+0x08930378                        # aura bit
+0x0893BD50                        # clash event manager
+0x0898EFB4 0x08972760 0x0891DF68   # costume break: finishing technique test, action 0x113, throw start
+0x088553F0                        # change loader job: transformation waits for the new character
+0x0893A10C                        # clash event states: survival retries a dropped replacement request
+0x089167E0                        # fighter special camera smoothing factor (item 51)
+0x0892424C 0x08894ACC             # blast end (52b): hit receive, attacker release
+0x089B303C 0x089AECE0             # team glow colour, render flags (close camera silhouette) (53)
+0x0880740C                        # animated map parts UV phase at 30 Hz (54/86)
+0x0893CECC                        # BtlCharSnd_Request (BT3 stage sounds, item 65)
+0x0888C56C                        # EftWater_AddSplashAt (BT3 stage debris splash, item 65)
+0x089C6CA0 0x089C6DB4 0x089C6D60  # model index (damaged variant, colours 5..10), index to character, model index by the loader
+0x089B14C8                        # object animation play: supports at 60 keep the 30 Hz default speed (109)
+0x088F7140 0x088871A4             # transformation effect start, night moon sprite draw: stage sprite loaded in battle (core/hooks/wrappers60.inc moon_*)
+0x088F5600 0x088F70EC 0x088F7080  # transformation kind->set, manager update, manager term: artificial moon set from a mod (wrappers60.inc tfm_*)
+0x0891A464 0x08919EB4             # fighter camera cut request, fighter demo camera update: pre-animation CMAN (wrappers60.inc pc_*)
+0x089A6F28                        # stage collision BVH descent: depth guard (a cycle in the map data overflowed the stack)
+0x089DC2A0                        # HUD clash prompt
+0x0880E0C8                        # bone-matrix block size of objects (bone_room)
+0x088B4EF0 0x08902B40             # render slot table
+0x089477B4 0x08916904             # float, camera bob in the air
+0x088C9EF8                        # ki blast carrier: life countdown
+0x08817100 0x08817390 0x088134EC  # network phase, error, stopwatch
+0x0881548C                        # lockstep inputs
+0x089C044C 0x089AD480             # rand, shake
+0x088155C0 0x08814674             # sync check host, client
+0x088404D8                        # AGS/RHG pair loader (HUD root)
+0x089E8438 0x089E84DC 0x089E85EC  # HUD CPU class: constructor, load, update
+0x089E5674 0x089E642C 0x089E6604  # HUD bar draw (target filter), portrait attach, bar name (slot BTL_NAME)
+0x089E2EFC 0x089E1A3C             # HUD manager init, teardown
+0x089E38D4 0x089E1F78 0x089E22C0  # HUD manager setup, start, stop
+0x089E2D58 0x089E2BB4             # HUD manager: unload / reload one fighter's bar (transformation)
+0x089F62A0 0x089F5B14 0x089F6060 0x089F55E4  # HUD union counter: slot attach, load, draw, state (opponent copy as its fighter)
+0x089E4354 0x089EBAB8 0x089F4990  # HUD senzu, partner command and round timer draws (bar scale, timer centred)
+0x0885862C                        # local player index (ability icon copies)
+0x089D5C88 0x089D5DDC 0x089D5F44 0x089D60E0 0x089D64C8 0x089D67CC  # HUD ability icons: class methods
+0x089F1E68 0x089F1F28 0x089F2194 0x089F1A68 0x089F24D0  # technique window class (charge list copy): load, update, draw, normal state, animation state
+0x08998BE4                        # special running for a fighter (charge list copy opens nothing by itself)
+0x08839268                        # savedata poll: holds the boot notices while the start screen runs
+0x08A642D4                        # sceGuDrawArray: charge list texts scaled (font engine has no scale)
+0x0881A1A0 0x08858830 0x08931BE4  # local multiplayer: pad read, CPU check, fighter input tick
+0x08904F30 0x08905008 0x08A16E60  # battle Start checks and pause title: pause from any local player
+0x0885AD48                        # battle draw: split screen, one pass per view
+0x0882F68C                        # packet buffers free: split screen gives back the game's block
+0x089CFEA4 0x089CFFFC 0x089D070C  # HUD tree update walk, draw walk, root draw: per-player HUD in split screen
+0x089D4CD4 0x089D39B4 0x089D5164 0x089D4030  # HUD container load, unload, update, battle_text event: per-player copies
+0x089DFBD0 0x0893CFD8             # beam clash page draw (button of player 2), sound volume by distance (nearest player)
+0x08840640                        # AGS/RHG unload: per-player copies never unload what they share
+0x089BFD60 0x089BFDB0             # game allocation gate and free: what the heap cannot hold goes to port memory
+0x089C34AC 0x089C4214             # scene change and multiplayer scene: submenu Local / LAN / Online, Local scene
+0x08A0758C 0x08A07AE0 0x08A07D18 0x08A07284  # map select time, senzu and stage rows: fixed in ranked free battle
+0x08A064B0                        # stage select next row: ranked free battle skips time and senzu
+0x089D15F0 0x089D161C             # widget open and close: savedata progress boxes never shown
+0x0883EE74                        # text by id: mods refusal in the game's rejection box
+0x0881A140                        # local pad read: host skips the intro in WLAN
+0x0882FFA4 0x08830274             # pak load and preload: local multiplayer uses the multiplayer free battle paks
+0x088174AC 0x088174FC 0x08816E24  # lockstep input store: lookup, store, clear (input delay per scene)
+0x088566C4                        # battle result setter (ranked online report)
+0x0880E480                        # fighter shadow silhouette: real silhouette at any distance (soft shadows)
+0x088B540C 0x0880CAF4 0x088B5CD0  # cel shading: aura colour per fighter, markers around each fighter draw and each aura draw
+0x088B446C                        # aura intensity and particles per owner: taller aura in charge phase 2 (item 69)
+0x089B0278                        # motion data decompression: the charge loop of phase 1 with the port's animation (item 69)
+0x088C95BC                        # charge aura node create: phase 2 aura of the character's mod (item 69)
+0x088C958C                        # charge aura loader update: ticks the mod's phase 2 aura (item 69)
+0x088C9534                        # charge aura loader destroy: frees the mod's phase 2 aura (item 69)
+0x0880BB28                        # water: end of the 3D scene marker (underwater pass gate)
+0x0880BD3C                        # fighters' packet: life bars drawn before it (bars behind fighters)
+0x0898F130                        # fighter camera copy: BT3 camera (item 62)
+0x08A642A8                        # sceGuSetMatrix: BT3 field of view with the BT3 camera
+0x0898F22C                        # fighter special camera priority: 0 while the BT3 camera ignores a combo cut
+0x08A06BB8 0x089FC394 0x089FCC08  # character select colours: input, rows by colour, selector draw
+0x0883A998 0x0881AA74             # volumes: category set (voices own categories 1 and 2), SFX scale (effects byte)
+0x089BFDF4                        # allocation: main menu list one word larger (Character Reference item)
+0x08A03C0C 0x08A03C9C 0x08A07170 0x08858764  # map select: constructor, destructor (tail arrays), availability; battle map index (tournament)
+0x0880BBF4                        # frame end after the scene draw: Character Reference 3D viewer (objects, stage and scene modules without a battle)
+0x089F9F34                        # select grid page draw (item 43: next player cursor frame)
+0x089FF8C8                        # select form selector draw: thumbnails and cursor at the AGS 35 slot scale (3D layout)
+0x089D1B94                        # AGS instance draw: the character select's big render shown (item 33)
+0x0885332C 0x08853290             # battle voice subtitle: start/stop handler, centred draw (item 48, BT3 bars)
+0x08832448 0x08834518             # font begin and centred text: the centred subtitle draws without depth test, above the bottom bars
+
+# overlay functions wrapped by psp_wrap: <overlay> <addresses>
+[ovl_wrappers]
+7_7 0x08A82B1C                    # credits player update: skip the intro credits (option)
+17_11 0x08A81DC0 0x08A83508 0x08A83554 0x08A836F0  # main menu: input, wheel rotation, list load, list unload (Character Reference item)
+21_15 0x08A90930 0x08A8F1C4 0x08A8F450 0x08A8F7A0 0x08A8FB70 0x08A8FC08 0x08A8FE70 0x08A8FFC4  # Options audio page: init, selection, music bar, input, open, close, update, draw
+
+# per-tick accumulator stores of the classes in [conv60]: they advance by half (psp_half)
+[halves]
+0x088B4514 0x088B453C 0x088B4598 0x088B45C0 0x088B4650 0x088B469C 0x088B46AC 0x088B4708  # aura state 0x088B446C
+0x088B4750 0x088B4760 0x088B47AC 0x088B47E0 0x088B4A38 0x088B4A64 0x088B4A74 0x088B4AA8
+0x088B4ABC 0x088B4AD8 0x088B4C38 0x088B4C44
+0x088B2D00 0x088B2D20 0x088B2D30 0x088B2D6C 0x088B2E24 0x088B2E4C                        # sparks 0x088B2B54
+0x088CA034 0x088CA0E4                                                                    # ki blast carrier 0x088C9EF8: position, fade
+
+# register dump before these addresses (no delay slots)
+[probes]
+0x08831F68 0x088320CC 0x08832530 0x08832DC4 0x08834574 0x08835E10  # font engine strings (TTT_TEXT_LOG)
+0x08AADCF8  # story field update: story menus context
+0x08831FCC 0x08832600 0x08832E04 0x08833E70 0x088345BC 0x088356C8 0x08835E70 0x088366C4  # glyph metric table sites (command combos)
+
+# result of these instructions replaced right after they run (psp_after)
+[after]
+0x08A0660C 0x08A069A8 0x08A08504 0x08A08840 0x08A0889C 0x08A067A4 0x08A069A4 0x08A084C0  # select screen roster tables, limits, wrap, slider (core/hooks/roster.inc)
+0x08A08500 0x08A08898 0x08A069D4 0x08A08524 0x08A08878 0x08A088C0 0x08A084D4 0x08A09618
+0x08A09624 0x08A096F0 0x08A0973C 0x08A0959C 0x08A09714 0x08A09760 0x08A095A4 0x08A09718
+0x08A09764 0x08A096EC 0x089F9314
+0x08A0690C 0x08A08980 0x08A0916C 0x08A0936C 0x08A094A8 0x08A09554 0x08A09610 0x08A097A0  # Random cell: main, 24_18, 32_20, 48_30, 56_38; CPU pool
+0x08A09828 0x08A82A6C 0x08A82AE0 0x08A831D8 0x08A8F394 0x08A91088 0x08AA45BC 0x08AA48BC
+0x08A8DD68 0x08A8E4D0 0x08A8E550 0x08AA930C 0x08AB77A4 0x08AB7824 0x08A08720
+0x08A33384 0x08A33654 0x08A0874C 0x089CEE60 0x089FA294 0x089FA768 0x089F7718 0x089F7C60  # unlock gates: valid character numbers; grid draw of empty positions
+0x089F8508 0x089FBBBC 0x08A0314C 0x08A3E398 0x08A0662C 0x088573A8 0x08857464 0x089FA314
+0x08A06698 0x08A06700
+0x089F9B6C 0x089FB2AC 0x089FF6F0 0x08A01AD8 0x08A0294C  # per-number loops: skip the reserved numbers 0x47-0x4B
+0x089C60D8 0x089D3664 0x089E68AC 0x088531A4 0x088531C4  # system id, name and voice tables of new characters
+0x089C6CE4 0x089C6D80 0x089C6DC0 0x08852C28 0x08852C98 0x0885312C 0x08853188 0x08853220  # PACKFILE: new model and voice groups, index count, sectors and buffer
+0x0882FBE8 0x0882FBF8 0x0882FC94 0x0882FBFC 0x0882FB84 0x08830074 0x088301C0 0x08830298
+0x08830B8C 0x08831010 0x08831448 0x088315D4 0x0883177C 0x08831CC4 0x0882FCE8
+0x08A04808 0x08A04A08 0x08A053DC 0x08A07300 0x08A0752C 0x08A07108 0x08A04A10 0x08A048C0  # map select (core/hooks/stages.inc): Random, draw, cells
+0x08A04170 0x08A05164 0x08A053F4 0x08A05930 0x08A0753C 0x08A07118 0x08A05098 0x08A041BC  # cells, states per map, PACKFILE entries
+0x08A043DC 0x08A05054 0x08A0505C 0x08A042CC 0x08A044E8 0x08A05160 0x089C6E68 0x089C6E7C
+0x08A07124 0x08A0714C 0x08A81B88 0x08A81BAC 0x08A81934 0x08A81954 0x08AB9FA0 0x08AB9FA8 0x08AB9FB8  # battle build Random (overlays)
+0x08983634 0x08983A00 0x089AAC48  # transformation type 2 (camera 2, cman): availability and setup refusals, Metamoru characters open with 039 (core/hooks/tr_wheel.inc)
+
+# battle effect classes converted to real 60 (TTT_VFX60=0 puts them back behind the gate)
+[conv60]
+0x088B5674  # aura
+0x088C9EF8  # ki blast carrier (ki blasts, held triangle, flight effect)
+
+# classes updated every tick without conversion (TTT_VFX_FREE overrides, 0 disables)
+[free_classes]
+0x088C3D24-0x088C3D24
+0x088C9EF8-0x088C9EF8
+
+# old environment variables and cfg keys mapped to the current names
+[legacy_env]
+TTT_AJUSTES         TTT_SETTINGS
+TTT_ALFAFB          TTT_ALPHAFB
+TTT_BANDERAS        TTT_FLAGS
+TTT_BORDE           TTT_OUTLINE
+TTT_BORDE_VENTANA   TTT_OUTLINE_WINDOW
+TTT_CACHE_ARMADO    TTT_BUILT_CACHE
+TTT_CAPTURAS        TTT_CAPTURES
+TTT_CENSOFN         TTT_FN_CENSUS
+TTT_CENSOJALR       TTT_JALR_CENSUS
+TTT_CHOQUE60        TTT_CLASH60
+TTT_COMBATE_FPS     TTT_BATTLE_FPS
+TTT_CONTROLES       TTT_CONTROLS
+TTT_DIFERIR         TTT_DEFER
+TTT_DISCO_ISO       TTT_DISC_ISO
+TTT_DISCO_LISTA     TTT_DISC_LIST
+TTT_DISCO_RESCAN    TTT_DISC_RESCAN
+TTT_DISCO_TRAZA     TTT_DISC_TRACE
+TTT_DISCO_VERIFICA  TTT_DISC_VERIFY
+TTT_DOSAUNO         TTT_TWO_TO_ONE
+TTT_ENTRADA_FRESCA  TTT_FRESH_INPUT
+TTT_ESCALA          TTT_SCALE
+TTT_ESCRITURA       TTT_WATCH_WRITE
+TTT_ESPIA           TTT_SPY
+TTT_EVENTOS         TTT_EVENTS
+TTT_EVENTOS_UNA     TTT_EVENTS_ONCE
+TTT_FIJAR           TTT_FIX
+TTT_FILTRO          TTT_FILTER
+TTT_FLOTAR          TTT_FLOAT
+TTT_GIRO_EXACTO     TTT_TURN_EXACT
+TTT_GIRO_GOLPE      TTT_TURN_SNAP
+TTT_GRAFICOS        TTT_GRAPHICS
+TTT_GUARDADO        TTT_SAVE_DIR
+TTT_HILOS           TTT_THREADS
+TTT_IDIOMA          TTT_LANGUAGE
+TTT_LATENCIA        TTT_LATENCY
+TTT_LECTURAS        TTT_READS
+TTT_LOTE            TTT_BATCH
+TTT_MEDIO           TTT_HALF
+TTT_MEDIOFIN        TTT_HALF_END
+TTT_MEDIOINI        TTT_HALF_START
+TTT_MEDIO_SIN       TTT_HALF_EXCLUDE
+TTT_MONTON_KB       TTT_HEAP_KB
+TTT_NITIDEZ         TTT_SHARPNESS
+TTT_PANTALLAS       TTT_SCREENS
+TTT_PARCHE          TTT_PATCH_SUB
+TTT_PON             TTT_POKE
+TTT_PRECARGA        TTT_PRELOAD
+TTT_PRESENTAR_YA    TTT_PRESENT_NOW
+TTT_PUNTO           TTT_POINT
+TTT_RANURAS         TTT_SLOTS
+TTT_RED_LAN         TTT_NET_LAN
+TTT_RED_LOG         TTT_NET_LOG
+TTT_RED_PUERTO      TTT_NET_PORT
+TTT_RESOL           TTT_RESOLVE
+TTT_RETRASO_ENTRADA TTT_INPUT_DELAY
+TTT_RETRASO_MARGEN  TTT_INPUT_DELAY_MARGIN
+TTT_RITMO           TTT_RATE
+TTT_SALTAR          TTT_SKIP
+TTT_SFX_BUCLE       TTT_SFX_LOOP
+TTT_SINCRO          TTT_SYNC
+TTT_SOLAPE          TTT_OVERLAP
+TTT_SONIDO          TTT_SOUND
+TTT_SONIDO_BLOQUE   TTT_SOUND_BLOCK
+TTT_SONIDO_COLA     TTT_SOUND_QUEUE
+TTT_SONIDO_HZ       TTT_SOUND_HZ
+TTT_SONIDO_LOG      TTT_SOUND_LOG
+TTT_SONIDO_TONO     TTT_SOUND_TONE
+TTT_SONIDO_VOL      TTT_SOUND_VOL
+TTT_TEX_AJUSTE      TTT_TEX_FIT
+TTT_TINTE           TTT_TINT
+TTT_TIRAS           TTT_STRIPS
+TTT_TOPE            TTT_CAP
+TTT_TRAZAFN         TTT_TRACE_FN
+TTT_TRAZAUV         TTT_TRACE_UV
+TTT_TRAZA_COLA      TTT_TRACE_QUEUE
+TTT_TURBO_CARGA     TTT_LOAD_TURBO
+TTT_VALLA           TTT_FENCE
+TTT_VENTANA         TTT_WINDOW
+TTT_VERLOD          TTT_SHOW_LOD
+TTT_VFX_LIBRES      TTT_VFX_FREE
+TTT_VIBRA           TTT_RUMBLE
+TTT_VIBRA_ANIMS     TTT_RUMBLE_ANIMS
+TTT_VIBRA_DESP      TTT_RUMBLE_SHIFT
+TTT_VIBRA_EVENTOS   TTT_RUMBLE_EVENTS
+TTT_VIBRA_LOG       TTT_RUMBLE_LOG
+TTT_VIBRA_PROPIA    TTT_RUMBLE_PRIVATE
+TTT_VIBRA_SAS       TTT_RUMBLE_SAS
+TTT_VIBRA_SLOTS     TTT_RUMBLE_SLOTS
+TTT_VIGILAR         TTT_WATCH_CALLS
+TTT_VIGTEX          TTT_WATCH_TEX
+TTT_VIGTODO         TTT_WATCH_ALL
+TTT_VISTA           TTT_FIT
+TTT_VOLATIL         TTT_VOLATILE
+TTT_ATRAC_VOLCAR    TTT_ATRAC_DUMP

@@ -1,0 +1,70 @@
+01 Goku Base: 1428, 4442
+02 Goku SS: 1433, 4568
+03 Goku SS2: 1438, 4694
+04 Goku SS3: 1443, 4820
+05 Gohan Kid: 1448, 4946
+06 Gohan Teen Base: 1453, 5072
+07 Gohan Teen SS: 1458, 5198
+08 Gohan Teen SS2: 1463, 5324
+09 Gohan Base: 1468, 5450
+10 Gohan SS: 1473, 5576
+11 Gohan SS2: 1478, 5702
+12 Gohan Ultimate: 1483, 5828
+13 Piccolo: 1488, 5954
+14 Krillin: 1493, 6080
+15 Yamcha: 1498, 6206
+16 Tien: 1503, 6332
+17 Chaos: 1508, 6458
+18 Vegeta Scouter: 1513, 6584
+19 Vegeta Base: 1518, 6710
+20 Vegeta SS: 1523, 6836
+21 Vegeta SS2: 1528, 6962
+22 Vegeta Majin: 1533, 7088
+23 Trunks Kid Base: 1538, 7214
+24 Trunks Kid SS: 1543, 7340
+25 Trunks Sword Base: 1548, 7466
+26 Trunks Sword SS: 1553, 7592
+27 Trunks Base: 1558, 7718
+28 Trunks SS: 1563, 7844
+29 Videl: 1568, 7970
+30 Goten Base: 1573, 8096
+31 Goten SS: 1578, 8222
+32 Gotenks SS: 1583, 8348
+33 Gotenks SS3: 1588, 8474
+34 Super Gogeta: 1593, 8600
+35 Super Vegito: 1598, 8726
+36 Bardock: 1603, 8852
+37 Raditz: 1608, 8978
+38 Saibaman: 1613, 9104
+39 Nappa: 1618, 9230
+40 Cui: 1623, 9356
+41 Zarbon: 1628, 9482
+42 Zarbon Transformed: 1633, 9608
+43 Dodoria: 1638, 9734
+44 Captain Ginyu: 1643, 9860
+45 Recoome: 1648, 9986
+46 Guldo: 1653, 10112
+47 Jeice: 1658, 10238
+48 Burter: 1663, 10364
+49 Frieza Form 1: 1668, 10490
+50 Frieza Form 2: 1673, 10616
+51 Frieza Form 3: 1678, 10742
+52 Frieza Final Form: 1683, 10868
+53 Frieza Full Power: 1688, 10994
+54 Android 16: 1693, 11120
+55 Android 17: 1698, 11246
+56 Android 18: 1703, 11372
+57 Android 19: 1708, 11498
+58 Dr Gero: 1713, 11624
+59 Cell Jr: 1718, 11750
+60 Cell Form 1: 1723, 11876
+61 Cell Form 2: 1728, 12002
+62 Cell Perfect Form: 1733, 12128
+63 Cell Perfect: 1738, 12254
+64 Dabura: 1743, 12380
+65 Majin Buu: 1748, 12506
+66 Super Buu: 1753, 12632
+67 Super Buu Gohan: 1758, 12758
+68 Kid Buu: 1763, 12884
+69 Broly LSS: 1768, 13010
+70 Frieza Soldier: 1773, 13136

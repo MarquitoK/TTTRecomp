@@ -1,0 +1,24 @@
+# Size limits of patchers/patch_limits.py: [group default_KB old_option] then lui/addiu address pairs in EBOOT.OLD
+# option --group (underscore -> dash) takes KB; a change needs a full regeneration
+
+[character 4096 personaje]  # fighter slot capacity, original 1311 KB = 0x147C00
+0x089AF9E4 0x089AF9F4
+0x089AF9E8 0x089AF9F8
+0x089AFA2C 0x089AFA3C
+0x089AFA4C 0x089AFA60
+0x089AFA50 0x089AFA68
+
+[map 4096 mapa]  # original 1116 KB = 0x117000
+0x0885602C 0x08856030
+0x08856038 0x0885603C
+
+[sfx 1024]  # per fighter, original 293 KB = 0x49400
+0x08855EC4 0x08855EC8
+0x08856054 0x0885606C
+0x0881A4A8 0x0881A51C
+0x0881A4B4 0x0881A514
+0x0881A4C0 0x0881A50C
+0x0881A4CC 0x0881A504
+
+[sfx_map 512 sfx-mapa]  # original 100 KB = 0x19000
+0x0881A4D8 0x0881A4FC

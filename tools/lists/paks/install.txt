@@ -1,0 +1,12 @@
+1-1: 01_buttons_bg.ags
+2-2: 02_buttons_bg.rhg
+3-3: 03_game_logo_variants.ags
+4-4: 04_game_logo_variants.rhg
+5-5: 05_installing_label.ags
+6-6: 06_empty.dat
+7-7: 07_installing_label_en.rhg
+8-8: 08_installing_label_es.rhg
+9-9: 09_installing_label_fr.rhg
+10-A: 10_empty.dat
+11-B: 11_empty.dat
+12-C: 12_navbar.pak

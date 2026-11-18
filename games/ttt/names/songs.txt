@@ -1,0 +1,10 @@
+# row (16 px rows of the song names texture of the map select) | en | es
+0 | 1. Dragon Claw | 1. Garra de dragón
+1 | 2. Fighting of the Spirit | 2. Lucha del espíritu
+2 | 3. Force Majeure | 3. Fuerza mayor
+3 | 4. Enigmatic Soul | 4. Alma enigmática
+4 | 5. Burst Open | 5. Aparición milagrosa
+5 | 6. Fire Nation | 6. Nación de disparo
+6 | 7. Super Strength | 7. Superfuerza
+7 | 8. Deadly Zone | 8. Zona mortal
+8 | 9. Explosion | 9. Explosión

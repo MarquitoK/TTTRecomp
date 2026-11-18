@@ -1,0 +1,12 @@
+﻿1-1: 01_fly_dash.vag
+2-2: 02_powerdown.vag
+3-3: 03_charge.vag
+4-4: 04_battle_end.vag
+5-5: 05_battle_end.vag
+6-6: 06_teleport.vag
+7-7: 07_nav_chars.vag
+8-8: 08_confirm_char.vag
+9-9: 09_popup_open.vag
+10-A: 10_popup_close.vag
+11-B: 11_reward.vag
+12-C: 12_encounter.vag

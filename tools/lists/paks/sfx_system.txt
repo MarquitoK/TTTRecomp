@@ -1,0 +1,10 @@
+﻿1-1: 01_ui_close.vag
+2-2: 02_score_count.vag
+3-3: 03_fruit_collect.vag
+4-4: 04_nav_vertical.vag
+5-5: 05_nav_horizontal.vag
+6-6: 06_error.vag
+7-7: 07_confirm.vag
+8-8: 08_dialog_close.vag
+9-9: 09_dialog_open.vag
+10-A: 10_victory.vag

@@ -1,0 +1,10 @@
+1-1: 01_battle_config_1.ags
+2-2: 02_battle_config_1.rhg
+3-3: 03_battle_config_2.ags
+4-4: 04_battle_config_2.rhg
+5-5: 05_battle_config_3.ags
+6-6: 06_battle_config_3.rhg
+7-7: 07_battle_config_4.ags
+8-8: 08_battle_config_4.rhg
+9-9: 09_battle_config_5.ags
+10-A: 10_battle_config_5.rhg

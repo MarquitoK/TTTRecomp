@@ -1,0 +1,14 @@
+scale=4
+units=pixeles del atlas (x4); entre parentesis, pixeles PSP
+outline_px=0
+shadow_dx=4
+shadow_dy=4
+shadow_color=000000FC
+letter_spacing=-0.35  # ya incluido en xadvance (-0.09 PSP)
+fill=0:FFFFFF 1:FFFFFF  # degradado vertical, 0 = altura de mayuscula, 1 = linea base
+italic_shear=0.21  # cursiva sintetica (inclinacion x += shear * altura sobre la base)
+cap_height=36 (9 PSP)
+line_height=56 (14 PSP), base=40 (10 PSP)
+align=right
+font=Source Sans 3, peso 700, SIL OFL 1.1
+otros=sin brillo ni bisel; el original tiene antialias a 1 px

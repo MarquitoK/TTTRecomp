@@ -1,0 +1,8 @@
+1-1: 01_bg.ags
+2-2: 02_bg.rhg
+3-3: 03_bg_main.ags
+4-4: 04_bg_main.rhg
+5-5: 05_bg_chars_anim_a.ags
+6-6: 06_bg_chars_anim_a.rhg
+7-7: 07_bg_chars_anim_b.ags
+8-8: 08_bg_chars_anim_b.rhg

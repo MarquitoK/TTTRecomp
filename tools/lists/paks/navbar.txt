@@ -1,0 +1,16 @@
+1-1: 01_tex_empty.ags
+2-2: 02_tex_empty.rhg
+3-3: 03_navbar.ags
+4-4: 04_navbar.rhg
+5-5: 05_empty.bin
+6-6: 06_navbar_text_en.ags
+7-7: 07_navbar_text_es.ags
+8-8: 08_navbar_text_fr.ags
+9-9: 09_navbar_text_de_jp.ags
+10-A: 10_navbar_text_it.ags
+11-B: 11_empty.bin
+12-C: 12_navbar_text_en.rhg
+13-D: 13_navbar_text_es.rhg
+14-E: 14_navbar_text_fr.rhg
+15-F: 15_navbar_text_de_jp.rhg
+16-10: 16_navbar_text_it.rhg

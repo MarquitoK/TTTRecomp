@@ -1,0 +1,14 @@
+# row (14 px rows of the form label atlases 030 left and 032 right, same text in both) | en | es
+0 | Super Saiyan | Súper Saiyajin
+1 | Super Saiyan 2 | Súper Saiyajin 2
+2 | Super Saiyan 3 | Súper Saiyajin 3
+6 | Post-Transformation | Transformado
+7 | 1st Form | 1ª forma
+8 | 2nd Form | 2ª forma
+9 | 3rd Form | 3ª forma
+10 | Final Form | Forma final
+11 | Full Power | 100% de poder
+12 | Perfect Form | Forma perfecta
+13 | Perfect | Perfecto
+14 | Gohan Absorbed | Gohan absorbido
+15 | Legendary Super Saiyan | Súper Saiyajin legendario

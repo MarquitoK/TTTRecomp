@@ -1,0 +1,15 @@
+1-1: 01_sfx.pak
+2-2: 02_empty.ags
+3-3: 03_empty.rhg
+4-4: 04_free_bg_textures.pak
+5-5: 05_header_bg.ags
+6-6: 06_header_bg.rhg
+7-7: 07_header_labels.ags
+8-8: 08_header_labels.rhg
+9-9: 09_title_label.ags
+10-A: 10_title_label.rhg
+11-B: 11_navbar.pak
+12-C: 12_char_select.pak
+13-D: 13_map_select.pak
+14-E: 14_battle_config.pak
+15-F: 15_char_stats.pak

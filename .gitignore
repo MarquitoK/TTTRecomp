@@ -1,0 +1,48 @@
+# game content and build output
+juego/
+game/
+generado/
+generated/
+assets/
+assets_*/
+mods/
+muestras/
+toolchain/
+*.iso
+*.cso
+*.o
+*.exe
+*.dll
+*.part
+
+# local data of each install
+library_cache/
+coverage/
+games/ttt/asset_patches/applied.json
+**/guardado*/
+**/save_test/
+setup_log.txt
+
+# private: server and deploy (not needed to build the port)
+server/
+.wrangler/
+.dev.vars
+.env*
+*.pem
+*.key
+
+# local files at the root
+/*.txt
+/*.log
+/*.cfg
+/*_viejo.*
+
+# editors and system
+__pycache__/
+*.pyc
+.vscode/
+.idea/
+*.swp
+Thumbs.db
+desktop.ini
+.DS_Store

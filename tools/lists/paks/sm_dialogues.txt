@@ -1,0 +1,7 @@
+1-1: 01.bbq
+2-2: 02.bbq
+3-3: 03_dialogues.txt1
+4-4: 04_bg.atex
+5-5: 05.bbq
+6-6: 06.bbq
+7-7: 07_navbar.pak

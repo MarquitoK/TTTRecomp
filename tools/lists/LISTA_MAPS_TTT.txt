@@ -1,0 +1,10 @@
+01 Wasteland: 1174
+02 Rocky Area: 1176
+03 Island: 1178
+04 City Ruins: 1180
+05 Namek Land: 1182
+06 Namek Village: 1184
+07 Namek Destroyed: 1186
+08 Mountain Road: 1188
+09 Cell Games: 1190
+10 Kaioshin World: 1192
