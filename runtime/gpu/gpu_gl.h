@@ -884,6 +884,12 @@ static const char* GLR_FS =
     "      float rv = smoothstep(0.74, 0.92, wnz(vec2(vpo.x*2.2, vpo.y*0.45 + wet_k.y*2.5)))*smoothstep(0.3, 0.8, wnz(vpo.xy*0.7 + 9.0)); col.rgb += vec3(0.85, 0.9, 1.0)*rv*0.3*w*wet_k.z; }\n"
     "    else if(vwat.z > 0.0){ col.rgb *= 1.0 - water_w.x*vwat.z; col.rgb += vec3(0.85,0.92,1.0) * max(hi, rim) * water_w.y * vwat.z; }\n"
     "  }\n"
+    "  else if(vtoon.x < -2.0 && vwat.z > 0.0 && wet_k.x > 0.5){ float w = vwat.z; float wl = dot(col.rgb, vec3(0.3, 0.59, 0.11)); vec3 dk = max(mix(vec3(wl), col.rgb, 1.3), 0.0)*0.6;   // Mixed modes: TTT fighters without cel, wet: darker and richer\n"
+    "    vec3 fn = cross(dFdx(vpo.xyz), dFdy(vpo.xyz)); float fl = dot(fn, fn); fn = fl > 1e-20 ? fn*inversesqrt(fl) : vec3(0.0, 0.0, 1.0); if(dot(fn, vpo.xyz) > 0.0) fn = -fn;\n"
+    "    float fc = dot(fn, normalize(-vpo.xyz + vec3(0.0, 0.0, 1e-6)));\n"
+    "    col.rgb = mix(col.rgb, dk, 0.8*w);\n"
+    "    col.rgb += vec3(0.72, 0.8, 0.9)*pow(1.0 - clamp(fc, 0.0, 1.0), 4.0)*0.24*w;\n"
+    "    float rv = smoothstep(0.74, 0.92, wnz(vec2(vpo.x*2.2, vpo.y*0.45 + wet_k.y*2.5)))*smoothstep(0.3, 0.8, wnz(vpo.xy*0.7 + 9.0)); col.rgb += vec3(0.85, 0.9, 1.0)*rv*0.3*w*wet_k.z; }\n"
     "  if(vwat.x > -9000.0){ float sub = smoothstep(-water_w.z, water_w.z, vwat.x); col.rgb = mix(col.rgb, col.rgb*water_c.rgb, max(vwat.y, sub*water_c.w)); }\n"
     "  if(chg_k.x > 0.0){ float l = dot(col.rgb, vec3(0.3, 0.59, 0.11));   // SZ charge: night sky, ground a little dimmer and warmer, fighters lit\n"
     "    if(vpo.w > 0.2) col.rgb *= 1.0 + 0.08*chg_k.x;\n"
@@ -987,7 +993,7 @@ static void gq_area(int cat, const VtxGL* v, const uint32_t* idx, size_t n) {
 static bool glr_vtx_plain(const VtxGL* v, size_t n) {
     for (size_t i = 0; i < n; i++) {
         const VtxGL& g = v[i];
-        if (g.tl > -2.0f || g.pf > 0.5f || (g.pf > 0.2f && glr_chg_x > 0.0f) || g.wd > -9000.0f || (g.tf > 0.5f && (glr_bolt_w != 0.0f || g.ext != 0u))) return false;
+        if (g.tl > -2.0f || g.wet > 0.0f || g.pf > 0.5f || (g.pf > 0.2f && glr_chg_x > 0.0f) || g.wd > -9000.0f || (g.tf > 0.5f && (glr_bolt_w != 0.0f || g.ext != 0u))) return false;
     }
     return true;
 }
@@ -4097,6 +4103,9 @@ static void glr_flush_queue() {
     uint64_t gvu0 = perf_clock();
     const bool cpe = cp_on();
     auto wfig = [](const Job& q) { return q.toon || (patch_water_fig.val && q.fig); };   // a fighter for the water: with cel shading off the draws are fig, not toon
+    const bool mixw = wt_enh && patch_wet_mixed.val && (toon_raw() == 3 || toon_raw() == 4);
+    auto wmx = [mixw](const Job& q) { return mixw && !q.toon && q.fig; };   // Mixed modes: TTT fighters (no cel) also get the wet model
+    { static int lm = -1; if ((int)mixw != lm) { lm = (int)mixw; printf("mojado: luchadores sin cel %s (modo cel %d)\n", mixw ? "con el modelo mojado" : "sin modelo mojado", toon_raw()); } }
     if (!gv_vtx.empty()) {   // GPU vertex path: per-draw flags as the Job loop sets them, then one upload per flush
         bool gw_fs = wat_fseen, gw_ss = wat_surfseen;
         if (gw) gw_fl.assign(queue.size(), 0);
@@ -4167,9 +4176,9 @@ static void glr_flush_queue() {
                 uint8_t fl = gw_tail(t, e, wd, t.x1, q, wc, gw_mk(t, e));
                 gw_fl[qi] = fl | 16;
                 if (fl & 1) { uint32_t nt = (uint32_t)t.y1 / 3; wat_st.surf += nt; if (e.blend) wat_st.surf_bl += nt; if (e.zwrite) wat_st.surf_zw += nt; if (e.ztest) wat_st.surf_zt += nt; if (gw_fs) wat_st.after += nt; else wat_st.before += nt; }
-                for (int k = 0; k < t.x1; k++) { VtxGL& g = gv_vtx[t.x0 + k]; g.wd = wd[k]; g.wc = wc; if (t.toon) g.wet = wet; }
+                for (int k = 0; k < t.x1; k++) { VtxGL& g = gv_vtx[t.x0 + k]; g.wd = wd[k]; g.wc = wc; if (t.toon || wmx(t)) g.wet = wet; }
                 if (t.toon) { for (int k = 0; k < t.x1; k++) gv_vtx[t.x0 + k].pf = 0.0f; continue; }
-            } else if (t.toon) { float wet = wt_enh && rn_wet > 0.0f && t.d3 ? rn_wet : 0.0f; for (int k = 0; k < t.x1; k++) { VtxGL& g = gv_vtx[t.x0 + k]; g.wet = wet; g.pf = 0.0f; } continue; }
+            } else if (t.toon || wmx(t)) { float wet = wt_enh && rn_wet > 0.0f && t.d3 ? rn_wet : 0.0f; for (int k = 0; k < t.x1; k++) { VtxGL& g = gv_vtx[t.x0 + k]; g.wet = wet; if (t.toon) g.pf = 0.0f; } if (t.toon) continue; }
             const TexState& e = states[t.st_tex];
             float scene3d = (t.d3 && e.f.width >= 480 * scale_int()) ? 1.0f : 0.0f;
             bool ad = e.blend && ((e.bmode >> 4) & 15) == 10;
@@ -4272,7 +4281,7 @@ static void glr_flush_queue() {
         olbj(t);
         float wd[3] = {-1e4f, -1e4f, -1e4f}, wc = 0.0f, wet = 0.0f;
         bool surf = false, issurf = false, mesh = false;
-        if (t.toon && wt_enh && rn_wet > 0.0f && !t.cls && t.d3) wet = rn_wet;
+        if ((t.toon || wmx(t)) && wt_enh && rn_wet > 0.0f && !t.cls && t.d3) wet = rn_wet;
         if (battle && (!t.cls || t.cls == 2) && t.d3 && e.f.width >= mainw) {
             wat_3d = true;
 
@@ -4516,7 +4525,7 @@ static void glr_flush_queue() {
                 const VP& p = t.v[k];
                 uint32_t c = e.gouraud ? p.color : t.col_flat;
                 if (t.toon) glr_push(glr_vtx, p.x, p.y, p.z, p.iw, p.u, p.v, c, sw, sh, tw, th, toon_v[i * 6 + k * 2], toon_v[i * 6 + k * 2 + 1], t.tint, toon_e[i * 3 + k], t.tp, wd[k], wc, wet, toon_n[i * 3 + k], toon_l[i], p.vp, 0.0f);
-                else glr_push(glr_vtx, p.x, p.y, p.z, p.iw, p.u, p.v, c, sw, sh, tw, th, -9.0f, scene3d, 0, 0u, 0, wd[k], wc, 0.0f, 0u, 0u, kmap ? p.vp : nullptr, (kmap ? 1.0f : kdk ? 0.25f : 0.0f));
+                else glr_push(glr_vtx, p.x, p.y, p.z, p.iw, p.u, p.v, c, sw, sh, tw, th, -9.0f, scene3d, 0, 0u, 0, wd[k], wc, wmx(t) ? wet : 0.0f, 0u, 0u, kmap || (wmx(t) && wet > 0.0f) ? p.vp : nullptr, (kmap ? 1.0f : kdk ? 0.25f : 0.0f));
             }
             if (sm_on && t.d3 && !t.sv && !e.blend && e.f.width >= mainw && !issurf) sm_add(t, sw, sh);
             if (wat_enh && psp_map_wimm && t.wsf && !t.sv && t.d3 && e.f.width >= mainw && glr_vtx.size() >= 3) {

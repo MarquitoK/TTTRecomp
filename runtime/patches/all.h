@@ -15,6 +15,7 @@
 #include "patches/fx_late.h"
 #include "patches/fx_keep_bars.h"
 #include "patches/bars_layer.h"
+#include "patches/wet_mixed.h"
 #include "patches/hle_fast.h"
 #include "patches/fit_full.h"
 #include "patches/hud_bt3.h"
