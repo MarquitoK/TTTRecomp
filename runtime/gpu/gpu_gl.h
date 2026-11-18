@@ -2427,6 +2427,12 @@ static void atm_pass(DestGL* d, int w, int h) {
     bool wson = (ws_on() && aw_ok && wat_stale < 30) || wenh;
     bool rson = rn_live() && aw_ok && !psp_gpu_split2();
     bool sson = !wse_p.empty() && aw_ok && !psp_gpu_split2(), cson = (chg_k > 0.0f || psp_spark_n > 0 || spk_any || spk_fn > 0) && !psp_gpu_split2();
+    {   // diag 84.10
+        int why = !at_ok ? 1 : (lv == 0 && !gon && !wson && !rson && !sson && !cson) ? 2 : !at_full ? 3 : psp_sel3d_open() ? 4 : 0;
+        static int dl = 0, dw = -1, dwe = -1, drn = -1; int we = wat_enh * 8 + psp_map_wimm * 4 + (wsf_frame > 0) * 2 + aw_ok, rr = rn_enh * 2 + (rn_fno != 0);
+        if ((why != dw || we != dwe || rr != drn) && dl < 30) { dl++; dw = why; dwe = we; drn = rr; const char* e = getenv("TTT_WATER"); const char* r = getenv("TTT_RAIN"); const char* wt = getenv("TTT_WET");
+            printf("diag atm: cuadro %u, %s, nivel %d sol %d, agua enh %d inm %d tri %d cam %d, lluvia enh %d tormenta %d (hace %d), at_ok %d at_full %d split2 %d, env agua %s lluvia %s mojado %s\n", (unsigned)toon_fno, why == 0 ? "dibuja" : why == 1 ? "sale: sin camara" : why == 2 ? "sale: nada encendido" : why == 3 ? "sale: vista chica" : "sale: vista 3D de seleccion", lv, gm, wat_enh, psp_map_wimm, wsf_frame, (int)aw_ok, rn_enh, (int)(rn_fno != 0), rn_fno ? (int)(toon_fno + 1 - rn_fno) : -1, (int)at_ok, (int)at_full, (int)psp_gpu_split2(), e ? e : "-", r ? r : "-", wt ? wt : "-"); }
+    }
     if (!at_ok || (lv == 0 && !gon && !wson && !rson && !sson && !cson) || !at_full || psp_sel3d_open()) return;
     bool conly = atb_on() && lv == 0 && !gon && !wson && !rson && !sson && !wenh && (chg_k <= 0.0f || cdk_done_f == toon_fno) && !d->mfbo;   // charge or sparking alone: the main pass only adds the flames
     if (lv == 0) at_pan[1] = at_pan[3] = 0;
@@ -2492,6 +2498,21 @@ static void atm_pass(DestGL* d, int w, int h) {
     glBindTexture(GL_TEXTURE_2D, src);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR); glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glActiveTexture(GL_TEXTURE0 + 6); glBindTexture(GL_TEXTURE_2D, dd ? d->dtex : at_dtex);
+    {   // diag 84.10: what the shader reads (alpha ids of the screen, depth)
+        static int rl = 0; static uint32_t rf = 0;
+        if (rl < 10 && toon_fno - rf >= 300 && (wenh || rson)) {
+            rl++; rf = toon_fno;
+            std::vector<uint8_t> px((size_t)d->w * d->h * 4); std::vector<float> zr((size_t)d->w);
+            glBindFramebuffer(GL_READ_FRAMEBUFFER, dfbo(d)); glReadPixels(0, 0, d->w, d->h, GL_RGBA, GL_UNSIGNED_BYTE, px.data());
+            glBindFramebuffer(GL_READ_FRAMEBUFFER, dd ? dfbo(d) : at_dfbo); glReadPixels(0, h / 2, d->w, 1, GL_DEPTH_COMPONENT, GL_FLOAT, zr.data());
+            glBindFramebuffer(GL_READ_FRAMEBUFFER, dfbo(d));
+            int hist[256] = {}; for (size_t k = 0; k < (size_t)d->w * d->h; k++) hist[px[4 * k + 3]]++;
+            int t1 = 0, t2 = 0, t3 = 0; for (int k = 0; k < 256; k++) { if (hist[k] > hist[t1]) { t3 = t2; t2 = t1; t1 = k; } else if (k != t1 && hist[k] > hist[t2]) { t3 = t2; t2 = k; } else if (k != t1 && k != t2 && hist[k] > hist[t3]) t3 = k; }
+            int zs = 0, z0 = 0; for (int k = 0; k < d->w; k++) { if (zr[k] >= 1.0f) zs++; else if (zr[k] <= 0.0f) z0++; }
+            printf("diag lectura: destino %dx%d (pase %dx%d, escala %d, directo %d, copia parcial %d, msaa %d), alfa 126 %d px, mas comunes %d(%d) %d(%d) %d(%d), fila de profundidad: cielo %d cero %d de %d, ids luchador %d\n",
+                   d->w, d->h, w, h, scale_int(), (int)dd, (int)glr_copy_part(), (int)(d->mfbo != 0), hist[126], t1, hist[t1], t2, hist[t2], t3, hist[t3], zs, z0, d->w, [] { int n = 0; for (int j = 0; j < 8; j++) n += __builtin_popcount((unsigned)(uint16_t)(ol_ids[j] & ~ol_bg[j])); return n; }());
+        }
+    }
     glUseProgram(at_prog);
     glBindVertexArray(at_vao);
     glDisable(GL_DEPTH_TEST); glDepthMask(GL_FALSE); glDisable(GL_BLEND); glDisable(GL_STENCIL_TEST); glStencilMask(0); glDisable(GL_SCISSOR_TEST);
@@ -4134,6 +4155,7 @@ static void glr_flush_queue() {
         glBindVertexArray(glr_vao);
     }
     uint64_t gvu1 = perf_clock(); gv_t[5] += gvu1 - gvu0;
+    int dg_fx = -1, dg_2d = 0, dg_rt = 0, dg_mn = 0; uint32_t dg_dir = 0, dg_wh = 0, dg_fdir = 0; bool dg_any = false, dg_atm = false;   // diag 84.10
     for (size_t i = 0; i < queue.size(); i++) {
         const Job& t = queue[i];
         CpJob cpj_(t.cls);
@@ -4149,6 +4171,8 @@ static void glr_flush_queue() {
         float wave = won && wat_mode != 2 && wat_cam[0] ? WAT_WAVE : 0.0f;
         bool fx_any = gfxw_now || wave > 0 || fx.rush > 0 || fx.dash > 0 || fx.imode || fx.ab > 0 || fx.lines > 0 || (FX_BLOOM > 0 && FX_BLOOMK > 0) || g3_any || atm_on();
         bool fx_here = fx_any && battle && !wat_done && !wat_split && !t.d3 && wat_3d && e0.texture && !rt && e0.f.width >= mainw && main_now();   // first 2D draw after the scene and the outline (those read the screen): HUD
+        if (battle && wat_3d && !t.d3 && e0.texture && e0.f.width >= mainw) { if (rt) dg_rt++; else if (!main_now()) dg_mn++; else if (i < last3d && !dg_2d++) { dg_dir = e0.t.dir; dg_wh = (uint32_t)e0.t.w << 16 | (uint32_t)e0.t.h; } }
+        dg_any |= fx_any; dg_atm |= atm_on();
         if (fx_here && i < last3d) {   // a 2D draw in the middle of the scene (sprite effects, LOD point clouds): wait for the last 3D job
             fx_here = false; static int pe = 0, pf = -1;
             if (pe < 6 && (int)toon_fno != pf) { pe++; pf = (int)toon_fno; size_t n3 = 0; for (size_t k = i; k < last3d; k++) n3 += queue[k].d3; printf("fx: dibujo 2D 0x%08X %dx%d en medio de la escena, quedan %u trabajos 3D: los efectos esperan\n", e0.t.dir, e0.t.w, e0.t.h, (unsigned)n3); }
@@ -4167,6 +4191,7 @@ static void glr_flush_queue() {
             if (pl < 4) { pl++; printf("fx: efectos de pantalla antes del dibujo 2D con textura 0x%08X %dx%d\n", e0.t.dir, e0.t.w, e0.t.h); }
             tpk(7);
             glr_draw_batch();
+            dg_fx = (int)i; dg_fdir = e0.t.dir;
             { PERF_SUB("pase efectos/atm"); wat_pass(glr_current, 0, 0, mainw, 272 * scale_int(), wave); }
             st_prev = 0xFFFFFFFFu;
             tpk(1);
@@ -4473,6 +4498,10 @@ static void glr_flush_queue() {
                 if (toon_fno - wat_enh_ok <= 2u) glr_vtx.resize(glr_vtx.size() - 3);   // the shader draws the water: no BT3 normal-map surface
             }
         }
+    }
+    {   // diag 84.10
+        static int dl = 0; static uint32_t df = 0;
+        if (battle && wat_3d && dl < 40 && toon_fno - df >= 300) { dl++; df = toon_fno; printf("diag fx: cuadro %u, %u trabajos, ultimo 3D %u, efectos en %d (antes de 0x%08X), fx_any %d atm_on %d, agua %d enh %d inm %d, hechos %d, dividido %d, 2D antes del ultimo 3D %d (primero 0x%08X %ux%u), leen destino %d, otra vista %d\n", (unsigned)toon_fno, (unsigned)queue.size(), (unsigned)last3d, dg_fx, dg_fdir, (int)dg_any, (int)dg_atm, wat_mode, wat_enh, psp_map_wimm, (int)wat_done, (int)wat_split, dg_2d, dg_dir, dg_wh >> 16, dg_wh & 0xFFFFu, dg_rt, dg_mn); }
     }
     uint64_t gvu2 = perf_clock(); gv_t[6] += gvu2 - gvu1;
     glr_draw_batch();

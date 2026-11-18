@@ -8,6 +8,7 @@
 #include "patches/tick_flags.h"
 #include "patches/clash_gate.h"
 #include "patches/rt_texture.h"
+#include "patches/cam_heap.h"
 #include "patches/hle_fast.h"
 #include "patches/fit_full.h"
 #include "patches/hud_bt3.h"

@@ -46,6 +46,7 @@ static uint32_t pal_seq_global = 0;
 static uint64_t sprites = 0, prims_other = 0, prims_3d = 0;
 static int warnings = 0;
 static uint64_t frames_drawn = 0;
+static uint64_t o2d_f = 0; static int o2d_n = 0;   // diag 84.10: textured 2D main-view draws this frame
 
 void psp_gpu_flush();
 void psp_gpu_flush_by(int reason);
@@ -2689,6 +2690,7 @@ static void rasterize(const VP& a0_, const VP& b0_, const VP& c0_, bool texture,
     memcpy(t.lv, toon_lv, sizeof(t.lv));
     t.tint = t.toon ? toon_tint : 0;
     t.grp = t.toon ? toon_grp : 0; t.tp = t.toon ? toon_tp : 0; t.who = (uint8_t)(t.toon || t.fig ? toon_who : 0); t.aura = (uint8_t)toon_aura; t.face = (uint8_t)(t.toon ? toon_face : 0);
+    if (in_2d && texture && fb().width >= 480 * scale_int()) { if (o2d_f != frames_drawn) { o2d_f = frames_drawn; o2d_n = 0; } o2d_n++; }   // diag 84.10
     t.d3 = !in_2d; t.vh = view_hash; memcpy(t.up, view_up, sizeof(t.up));
     memcpy(t.vi, view_inv, sizeof(t.vi)); memcpy(t.eye, proj_eye, sizeof(t.eye)); t.sv = (uint8_t)split_now; t.wsf = (uint8_t)surf_now;
     t.x0 = x0; t.x1 = x1; t.y0 = y0; t.y1 = y1;
@@ -3867,7 +3869,8 @@ static void atm_pick(uint32_t dir) {   // sun position A of the map on screen (B
     const AtCam& c = t[k];
     float C[16]; bool cam = false;
     uint32_t cp = psp_l32(0x08A7E25Cu);   // the GE view is only the Y/Z flip: the world matrix carries the camera, [[0x08A7E25C]+0x40] is the real one (EBOOT_TTT 68.2)
-    if (cp >= 0x08800000u && cp < 0x0A000000u) { for (int i = 0; i < 16; i++) { uint32_t u = psp_l32(cp + 0x40u + 4u * i); memcpy(&C[i], &u, 4); } cam = C[15] == C[15] && std::fabs(C[15] - 1.0f) < 1e-3f; }
+    if (cp >= 0x08800000u && cp < (patch_cam_heap.val ? 0x10000000u : 0x0A000000u)) { for (int i = 0; i < 16; i++) { uint32_t u = psp_l32(cp + 0x40u + 4u * i); memcpy(&C[i], &u, 4); } cam = C[15] == C[15] && std::fabs(C[15] - 1.0f) < 1e-3f; }   // the camera can live in the port heap (heap_spill)
+    { static int cl = 0; static bool cw = true; if (cam != cw && cl < 6) { cl++; cw = cam; printf("atm: camara del juego 0x%08X %s (w %.3f)\n", cp, cam ? "leida" : "no valida", C[15]); } }
     auto proj = [&](float x, float y, float z, float* sp) {   // world -> eye (row vectors) -> GE flip -> projection -> screen
         float e[3], vi[3], o[4];
         for (int j = 0; j < 3; j++) e[j] = cam ? x * C[j] + y * C[4 + j] + z * C[8 + j] + C[12 + j] : (j == 0 ? x : j == 1 ? y : z);
@@ -5620,6 +5623,7 @@ static void ptcl_upto(int key);
 // BT3 EftSurf_Animate (one step per 30 Hz update) + EftSurf_DrawMeshes: scroll / wave / pulse per mesh, near fade, every triangle queued in
 // BT3's ordering table by its first vertex's depth (screen z >> 8 less zBias; layer 0 alpha blend, layer 1 additive), drawn far to near
 static void surf_draw(const LyBlk& b, uint32_t scr, uint32_t scr_end) {
+    { static int ol = 0; static uint32_t of = 0; if (ol < 8 && (uint32_t)frames_drawn - of >= 300) { ol++; of = (uint32_t)frames_drawn; printf("diag orden: superficie de agua BT3 tras %d dibujos 2D del cuadro\n", o2d_f == frames_drawn ? o2d_n : 0); } }
     if (!b.ok(0, 32) || memcmp(b.p, "BSRF", 4)) return;
     uint32_t nm = b.u(4), nt = b.u(8), total = b.u(24);
     if (!nm || nm > 4096 || !nt || nt > 32 || !total) return;
