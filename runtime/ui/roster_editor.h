@@ -1664,6 +1664,7 @@ static std::vector<std::string> re_load_mod(const std::string& root, const std::
     auto isf = [&](const std::string& p) { return std::filesystem::is_regular_file(std::filesystem::u8path(p), ec); };
     auto isd = [&](const std::string& p) { return std::filesystem::is_directory(std::filesystem::u8path(p), ec); };
     for (auto& x : d.chars) {
+        if (x.sysid < 0) continue;   // keyed characters: not in the editor yet
         ReChar c;
         c.sysid = x.sysid; c.donor = x.donor; c.id = roster::valid_id(x.id) ? x.id : "";
         for (int l = 0; l < 3; l++) c.name[l] = x.name[l];
@@ -1737,6 +1738,7 @@ static std::vector<std::string> re_load_mod(const std::string& root, const std::
         for (auto& l : d.layout) {
             std::vector<int> c;
             for (int v : l) {
+                if (v < -1) continue;
                 for (auto& o : re_orig) if (v >= 0 && o.second.newid == v) v = o.first;   // the file holds an original's own BT3 id
                 if (v < 0 || roster::vanilla(v) || re_find(v)) c.push_back(v);
             }

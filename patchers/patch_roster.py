@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Character select classes sized for every menu number (0..0xA6) and the map select for 126 maps, as Los ijue30s'
+# Character select classes sized for every menu number (0..0xD6: 161 BT3 ids + 48 keyed characters) and the map select for 126 maps, as Los ijue30s'
 # patch_select/patch_sala/patch_stage; the rest is data read at run time (core/hooks/roster.inc, stages.inc). Usage: patch_roster.py [--undo]; then a full regeneration
 import struct, sys, os, shutil
 
@@ -9,7 +9,8 @@ OVL = os.path.join(ROOT, 'overlays')
 OVERLAYS = ['24_18', '32_20', '48_30', '56_38', '65_41']
 VADDR, FOFF = 0x08804040, 0x1018
 OV_VA, OV_OFF = 0x08A814A0, 0x54
-N = 0xA7
+N = 0xD7
+N_OLD = (0xA7,)   # earlier sizes: a file in one of these states holds no other change and can be patched again
 MEM_OPS = {0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x28, 0x29, 0x2A, 0x2B, 0x2E, 0x31, 0x39}
 SP = 29
 
@@ -67,7 +68,7 @@ ST_ARRAYS = (0x8C, 0xC0, 0xEC)
 ST_SIZE = 0x13C + 4 * ST_CELLS * len(ST_ARRAYS)
 
 
-def patch_stage(d):
+def patch_stage(d, quiet=False):
     tail = {o: 0x13C + 4 * ST_CELLS * k for k, o in enumerate(ST_ARRAYS)}
     moved = 0
     for va in range(0x08A03A00, 0x08A05E24, 4):
@@ -76,11 +77,11 @@ def patch_stage(d):
         struct.pack_into('<I', d, off(va), (w & 0xFFFF0000) | tail[w & 0xFFFF])
         moved += 1
     if moved != 27: raise SystemExit('map select: 27 array accesses expected, %d found' % moved)
-    print('map select: 0x%X bytes, %d accesses moved' % (ST_SIZE, moved))
+    if not quiet: print('map select: 0x%X bytes, %d accesses moved' % (ST_SIZE, moved))
 
 
 # immediates outside the classes: battle id ranges (patch_battle) and the loops over every number (patch_unlock)
-EXTRA = [(0x089C60F8, 0xF, 6), (0x089C619C, 0xF, 6), (0x0886FEF4, 0x4D, 0x50), (0x089CEE90, 0x46, N), (0x0885745C, 0x46, N)]
+def extra(n): return [(0x089C60F8, 0xF, 6), (0x089C619C, 0xF, 6), (0x0886FEF4, 0x4D, 0x50), (0x089CEE90, 0x46, n), (0x0885745C, 0x46, n)]
 CTORS = [('pantalla', 0x089F708C, 0x51C), ('grilla', 0x089F8FB8, 0x1C0), ('caja', 0x089FA978, 0x1D4),
          ('forma', 0x089FEF78, 0x1A0), ('sala', 0x08A01050, 0x558), ('stage', 0x08A03C0C, 0x13C)]
 
@@ -91,9 +92,9 @@ def set_imm(d, o, va, old, new):
     struct.pack_into('<I', d, o, (w & 0xFFFF0000) | (new & 0xFFFF))
 
 
-def patch_main(d):
+def patch_main(d, n=N, quiet=False):
     sizes = {}
-    for cls in classes(N):
+    for cls in classes(n):
         moved = 0
         rm = cls['remap']
         get = rm if callable(rm) else rm.get
@@ -106,15 +107,16 @@ def patch_main(d):
             moved += 1
         for va, old, new in cls['counts']: set_imm(d, off(va), va, old, new)
         sizes[cls['name']] = cls['size']
-        print('%s: 0x%X bytes, %d accesses moved, %d counts' % (cls['name'], cls['size'], moved, len(cls['counts'])))
-    for va, old, new in EXTRA: set_imm(d, off(va), va, old, new)
-    patch_stage(d)
+        if not quiet: print('%s: 0x%X bytes, %d accesses moved, %d counts' % (cls['name'], cls['size'], moved, len(cls['counts'])))
+    for va, old, new in extra(n): set_imm(d, off(va), va, old, new)
+    patch_stage(d, quiet)
     sizes['stage'] = ST_SIZE
     return sizes
 
 
-def patch_overlay(path, sizes):
-    d = bytearray(open(path, 'rb').read())
+def patch_overlay(path, sizes, d=None, quiet=False):
+    write = d is None
+    if write: d = bytearray(open(path, 'rb').read())
     n = 0
     for name, ctor, old in CTORS:
         jal = struct.pack('<I', 0x0C000000 | ((ctor >> 2) & 0x3FFFFFF))
@@ -129,8 +131,8 @@ def patch_overlay(path, sizes):
             else:
                 raise SystemExit('%s: no size before the %s constructor at 0x%08X' % (os.path.basename(path), name, c - OV_OFF + OV_VA))
             c = d.find(jal, c + 4)
-    open(path, 'wb').write(d)
-    print('%s: %d allocations' % (os.path.basename(path), n))
+    if write: open(path, 'wb').write(d)
+    if not quiet: print('%s: %d allocations' % (os.path.basename(path), n))
     return n
 
 
@@ -148,15 +150,66 @@ if '--undo' in sys.argv:
             shutil.copy2(p + '.roster', p)
             print('restored', p)
     raise SystemExit
-for p in main:
-    d = backup(p)
-    sizes = patch_main(d)
-    open(p, 'wb').write(d)
-total = 0
-for p in ovls:
-    if not os.path.exists(p): raise SystemExit('missing ' + p)
-    d = backup(p)
-    open(p, 'wb').write(d)
-    total += patch_overlay(p, sizes)
-if not total: raise SystemExit('no character select constructor found in the overlays')
+
+
+def build(n, main_p):
+    # (main bytes, {overlay: bytes}) of the backups patched for n menu numbers
+    d = bytearray(open(main_p + '.roster', 'rb').read())
+    sz = patch_main(d, n, True)
+    out = {}
+    for o in ovls:
+        if not os.path.exists(o): continue
+        od = bytearray(open(o + '.roster', 'rb').read())
+        patch_overlay(o, sz, od, True)
+        out[o] = od
+    return d, out
+
+
+def rebase(path, cur, old, new):
+    # new + every byte the current file changed after the old patch (other patchers); refused where both touch the same byte
+    if len(cur) != len(old): raise SystemExit('%s: size changed after patch_roster.py, nothing written, tell Claude' % path)
+    out = bytearray(new)
+    diff = [i for i in range(len(cur)) if cur[i] != old[i]]
+    clash = [i for i in diff if new[i] != old[i]]
+    if clash: raise SystemExit('%s: %d bytes changed by another patcher where this patch writes too, nothing written, tell Claude' % (path, len(clash)))
+    for i in diff: out[i] = cur[i]
+    return out, len(diff)
+
+
+missing = [p for p in main + ovls if os.path.exists(p) and not os.path.exists(p + '.roster')]
+if missing and len(missing) < len(main) + len(ovls): raise SystemExit('missing backups (.roster): %s; nothing written, tell Claude' % ', '.join(os.path.basename(m) for m in missing))
+if missing:   # first run on untouched files
+    for p in main:
+        d = backup(p)
+        sizes = patch_main(d)
+        open(p, 'wb').write(d)
+    total = 0
+    for p in ovls:
+        if not os.path.exists(p): raise SystemExit('missing ' + p)
+        d = backup(p)
+        open(p, 'wb').write(d)
+        total += patch_overlay(p, sizes)
+    if not total: raise SystemExit('no character select constructor found in the overlays')
+else:
+    writes = {}
+    for p in main:
+        cur = open(p, 'rb').read()
+        best = None
+        for n in N_OLD + (N,):
+            d, _ = build(n, p)
+            if len(d) != len(cur): continue
+            k = sum(a != b for a, b in zip(d, cur))
+            if best is None or k < best[1]: best = (n, k)
+        if best is None: raise SystemExit('%s: size changed after patch_roster.py, nothing written, tell Claude' % p)
+        base = best[0]
+        old_m, old_o = build(base, p)
+        new_m, new_o = build(N, p)
+        writes[p], k = rebase(p, cur, old_m, new_m)
+        print('%s: from 0x%X to 0x%X, %d bytes of other patchers kept' % (os.path.basename(p), base, N, k))
+        for o in new_o:
+            oc = open(o, 'rb').read()
+            if o in writes: continue
+            writes[o], k = rebase(o, oc, old_o[o], new_o[o])
+            print('%s: %d bytes of other patchers kept' % (os.path.basename(o), k))
+    for p, d in writes.items(): open(p, 'wb').write(d)
 print('EBOOT and overlays patched for menu numbers up to 0x%X and %d maps; regenerate the port (analyzer.py + generator.py + make)' % (N - 1, ST_CELLS - 1))

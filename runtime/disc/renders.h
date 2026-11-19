@@ -372,7 +372,7 @@ static int on_q() {   // 0 off, else the quality
 }
 static int sys_of_menu(int n) {
     if (n >= 0 && n < roster::K_OLD) return roster::VANILLA[n];
-    for (int s = 0; s < roster::SYS; s++) if (!roster::vanilla(s) && roster::menu_of(s) == n && roster::find(s)) return s;
+    for (int s = 0; s < roster::ALL; s++) if (!roster::vanilla(s) && roster::menu_of(s) == n && roster::find(s)) return s;
     return -1;
 }
 static void colkeys_make() {
@@ -387,10 +387,10 @@ static void colkeys_make() {
             if (!ck.empty()) colkeys[lower(ck)] = {s, (int)k};
         }
     };
-    for (int s = 0; s < roster::SYS; s++) {
+    for (int s = 0; s < roster::ALL; s++) {
         int k = roster::group_vanilla(s);
         if (k >= 0) add(s, COL_MODEL - 1 + 5 * (size_t)k);
-        else if (ro_first != (size_t)-1 && roster::find(s) && roster::rank(s) >= 0) add(s, ro_first + 5 * (size_t)roster::rank(s));
+        else if (ro_first != (size_t)-1 && roster::find(s) && roster::rank(s) >= 0) add(s, ro_first + (roster::model_entry(roster::rank(s)) - roster::MODEL_BASE));
     }
     printf("render: %d contenedores de color conocidos para los HUD\n", (int)colkeys.size());
 }

@@ -1,6 +1,7 @@
 #pragma once
 // item 29.3: characters and cell layout declared by mods in mods/<id>/Roster/roster.txt; read by the disc (PACKFILE
-// entries of new groups) and by the hooks (roster tables). New BT3 ids are numbered by their rank among the free ones
+// entries of new groups) and by the hooks (roster tables). New BT3 ids are numbered by their rank among the free ones;
+// characters declared by key ([character Name]) get a runtime id from 161 on (never a BT3 id), sorted by key
 #include <string>
 #include <vector>
 #include <cstdio>
@@ -14,8 +15,13 @@
 
 namespace roster {
 
-static const int SYS = 161, NEW = 91, K_OLD = 70, FIRST_NEW = 0x4C;
-static const uint32_t MODEL_BASE = 14097, VOICE_BASE = MODEL_BASE + NEW * 5, PF_COUNT = VOICE_BASE + NEW * 126, NAME_ID = 9900, NAME_OLD = 6300;
+// DYN: keyed characters at once; they get PACKFILE groups only for the ones installed (the game's entry indexes are 16-bit)
+static const int SYS = 161, NEW = 91, DYN = 48, ALL = SYS + DYN, K_OLD = 70, FIRST_NEW = 0x4C, MENU_N = FIRST_NEW + NEW + DYN;
+static const uint32_t MODEL_BASE = 14097, VOICE_BASE = MODEL_BASE + NEW * 5, PF_COUNT = VOICE_BASE + NEW * 126, DYN_MODEL = PF_COUNT,
+    NAME_ID = 9900, NAME_OLD = 6300, NAME_DYN = 6400;
+inline int& dyn_n() { static int n = 0; return n; }   // keyed characters installed
+inline uint32_t dyn_voice() { return DYN_MODEL + 5 * (uint32_t)dyn_n(); }
+inline uint32_t pf_all() { return dyn_voice() + 126 * (uint32_t)dyn_n(); }
 // system ids of the 70 original characters (sysid_tab 0..69)
 static const uint8_t VANILLA[K_OLD] = {3, 4, 5, 6, 13, 14, 15, 16, 17, 18, 19, 21, 23, 25, 26, 27, 28, 29, 34, 35, 36, 37, 39, 40,
     41, 42, 44, 45, 46, 47, 49, 50, 52, 53, 56, 73, 77, 79, 80, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 99,
@@ -23,7 +29,8 @@ static const uint8_t VANILLA[K_OLD] = {3, 4, 5, 6, 13, 14, 15, 16, 17, 18, 19, 2
 
 // select screen labels: [kind][lang] kind 0 name, 1 form right, 2 form left; lang 0 en, 1 es, 2 unused, 3 all; -2 unset, -1 empty, >= 0 a BT3 id
 struct Labels { int ref[3][4] = {{-2, -2, -2, -2}, {-2, -2, -2, -2}, {-2, -2, -2, -2}}; };
-struct Char { int sysid = -1, donor = 3, parent = -1; std::string mod, id, folder, name[3], form_old[2]; int form = -2; Labels lab; };   // form: transformation text id (names as text), -1 none, -2 unset
+struct VsLine { std::string rival; int rid = -2, line = 0; bool victory = false; };   // intro/victory line against a rival (key or BT3 id)
+struct Char { int sysid = -1, donor = 3, parent = -1; std::string mod, id, folder, name[3], form_old[2], key, tf_key[4]; int form = -2, tf[4] = {-2, -2, -2, -2}; Labels lab; std::vector<VsLine> vs; };   // form: transformation text id (names as text), -1 none, -2 unset; tf: transformation targets (-2 as in the file, -1 none)
 struct Rename { int sysid = -1, newid = -1, form = -2; std::string mod, name[3], form_old[2]; Labels lab; };   // an original character: own names, own BT3 id
 struct Defs {
     bool loaded = false;
@@ -31,6 +38,7 @@ struct Defs {
     std::vector<Rename> renames;
     std::vector<std::vector<int>> layout;
     std::string layout_mod, layout_err;
+    std::vector<std::string> keyrefs;   // [layout] tokens given as keys: stored as -(2 + index) until load resolves them
     std::map<int, std::array<std::string, 2>> ftext;   // transformation texts: id < 100 = a row of games/ttt/names/forms.txt given another text, >= 100 = new
 };
 inline Defs& defs() { static Defs d; return d; }
@@ -70,10 +78,13 @@ inline std::string form_text(int id, int l) {   // the text of a transformation 
 
 // asset group k of each BT3 id in the original game (asset_group_tab 0x08A69720; not the order of VANILLA)
 static const uint8_t GROUP[SYS] = {255, 255, 255, 0, 1, 2, 3, 255, 255, 255, 255, 255, 255, 4, 5, 6, 7, 8, 9, 10, 255, 11, 255, 12, 255, 13, 14, 15, 16, 17, 255, 255, 255, 255, 18, 19, 20, 21, 255, 24, 25, 26, 27, 255, 22, 23, 29, 30, 255, 31, 32, 255, 34, 33, 255, 255, 28, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 35, 255, 255, 255, 36, 255, 37, 38, 255, 40, 41, 42, 39, 43, 44, 47, 46, 45, 48, 49, 50, 51, 52, 255, 255, 255, 69, 53, 54, 55, 56, 57, 59, 60, 61, 62, 58, 255, 63, 64, 255, 65, 255, 66, 67, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 68, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255};
+inline std::string low(std::string s) { for (auto& ch : s) ch = (char)tolower((unsigned char)ch); return s; }
+inline bool keyed(int s) { return s >= SYS && s < ALL; }
 inline int group_vanilla(int s) { return s >= 0 && s < SYS && GROUP[s] != 255 ? GROUP[s] : -1; }
 inline int sys_of_group(int k) { for (int s = 0; s < SYS; s++) if (GROUP[s] == k) return s; return -1; }
 inline bool vanilla(int s) { for (int v : VANILLA) if (v == s) return true; return false; }
-inline int rank(int s) {   // 0..90 for a free system id, -1 for an original one
+inline int rank(int s) {   // 0..90 for a free system id, NEW.. for a keyed one, -1 for an original one
+    if (keyed(s)) return NEW + (s - SYS);
     if (s < 0 || s >= SYS || vanilla(s)) return -1;
     int r = 0;
     for (int i = 0; i < s; i++) if (!vanilla(i)) r++;
@@ -82,6 +93,18 @@ inline int rank(int s) {   // 0..90 for a free system id, -1 for an original one
 inline int rank_vanilla(int s) { for (int i = 0; i < K_OLD; i++) if (VANILLA[i] == s) return i; return -1; }   // index in VANILLA (menu number), not the group
 inline int menu_of(int s) { int r = rank(s); return r < 0 ? -1 : FIRST_NEW + r; }
 inline int group_of(int s) { int r = rank(s); return r < 0 ? -1 : K_OLD + r; }
+inline uint32_t model_entry(int r) { return r < NEW ? MODEL_BASE + 5 * (uint32_t)r : DYN_MODEL + 5 * (uint32_t)(r - NEW); }
+inline uint32_t voice_entry(int r) { return r < NEW ? VOICE_BASE + 126 * (uint32_t)r : dyn_voice() + 126 * (uint32_t)(r - NEW); }
+inline uint32_t name_of_rank(int r) { return r < NEW ? NAME_ID + (uint32_t)r : NAME_DYN + (uint32_t)(r - NEW); }
+inline int rank_of_name(uint32_t id) { return id >= NAME_ID && id < NAME_ID + NEW ? (int)(id - NAME_ID) : id >= NAME_DYN && id < NAME_DYN + DYN ? NEW + (int)(id - NAME_DYN) : -1; }
+inline int entry_rank(uint32_t i, int* j, bool* voice) {   // an appended PACKFILE entry: its group rank, colour/sfx or voice line
+    *voice = (i >= VOICE_BASE && i < PF_COUNT) || (i >= dyn_voice() && i < pf_all());
+    if (i >= MODEL_BASE && i < VOICE_BASE) { *j = (int)(i - MODEL_BASE) % 5; return (int)(i - MODEL_BASE) / 5; }
+    if (i >= VOICE_BASE && i < PF_COUNT) { *j = (int)(i - VOICE_BASE) % 126; return (int)(i - VOICE_BASE) / 126; }
+    if (i >= DYN_MODEL && i < dyn_voice()) { *j = (int)(i - DYN_MODEL) % 5; return NEW + (int)(i - DYN_MODEL) / 5; }
+    if (i >= dyn_voice() && i < pf_all()) { *j = (int)(i - dyn_voice()) % 126; return NEW + (int)(i - dyn_voice()) / 126; }
+    return -1;
+}
 inline const Char* find(int s) { for (auto& c : defs().chars) if (c.sysid == s) return &c; return nullptr; }
 inline uint32_t* name_orig() { static uint32_t v[K_OLD]; return v; }   // game text id of each original group's name
 inline const Rename* renamed(int s) { for (auto& r : defs().renames) if (r.sysid == s) return &r; return nullptr; }
@@ -152,6 +175,18 @@ inline void read_file(const std::string& path, const std::string& mod, bool take
                 ren = &d.renames.back();
                 ren->sysid = n; ren->mod = mod;
             }
+            else if (s.compare(0, 11, "[character ") == 0 && s.back() == ']' && !isdigit((unsigned char)trim(s.substr(11, s.size() - 12))[0])) {
+                std::string k = trim(s.substr(11, s.size() - 12));
+                sec = 0;
+                if (!valid_id(k)) { printf("roster: %s: [character %s] clave no valida (solo letras, numeros, _ y -)\n", mod.c_str(), k.c_str()); continue; }
+                bool taken = false;
+                for (auto& c : d.chars) taken = taken || low(c.key) == low(k);
+                if (taken) continue;   // a higher-priority mod already defined it
+                sec = 2;
+                d.chars.push_back(Char());
+                cur = &d.chars.back();
+                cur->key = cur->id = k; cur->mod = mod;
+            }
             else if (sscanf(s.c_str(), "[character %d]", &n) == 1) {
                 sec = 2;
                 if (n < 0 || n >= SYS || vanilla(n)) { printf("roster: %s: [character %d] no es un id BT3 libre\n", mod.c_str(), n); sec = 0; continue; }
@@ -181,6 +216,7 @@ inline void read_file(const std::string& path, const std::string& mod, bool take
                 p = q == std::string::npos ? s.size() : q + 1;
                 if (t.empty()) continue;
                 if (t == "random" || t == "Random") { cell.push_back(-1); continue; }
+                if (!isdigit((unsigned char)t[0]) && valid_id(t)) { d.keyrefs.push_back(t); cell.push_back(-1 - (int)d.keyrefs.size()); continue; }
                 char* e = nullptr;
                 long v = strtol(t.c_str(), &e, 0);
                 if (*e || v < 0 || v >= SYS) { if (err.empty()) err = "linea " + std::to_string(ln) + ": id BT3 no valido " + t; continue; }
@@ -208,6 +244,22 @@ inline void read_file(const std::string& path, const std::string& mod, bool take
             else if (k == "voice_donor" || k == "base") cur->donor = v == "none" ? -1 : atoi(v.c_str());
             else if (k == "form_en" || k == "form_es") cur->form_old[k == "form_es"] = v;
             else if (k == "form") cur->form = v == "none" ? -1 : atoi(v.c_str());
+            else if (k == "transform") {
+                size_t p0 = 0;
+                for (int i = 0; i < 4 && p0 <= v.size(); i++) {
+                    size_t q = v.find(',', p0);
+                    cur->tf_key[i] = trim(v.substr(p0, q == std::string::npos ? std::string::npos : q - p0));
+                    if (q == std::string::npos) break;
+                    p0 = q + 1;
+                }
+            }
+            else if (k.size() == 11 && k.compare(0, 10, "transform_") == 0 && k[10] >= '1' && k[10] <= '4') cur->tf_key[k[10] - '1'] = v;
+            else if (k == "intro" || k == "victory") {
+                size_t c2 = v.find(':');
+                if (c2 == std::string::npos) continue;
+                VsLine x; x.rival = trim(v.substr(0, c2)); x.line = atoi(trim(v.substr(c2 + 1)).c_str()); x.victory = k == "victory";
+                cur->vs.push_back(x);
+            }
             else label_key(k, v, cur->lab);
         }
     }
@@ -240,6 +292,43 @@ inline void load(const std::string& root, const std::vector<std::string>& ids) {
         if (c.folder.empty()) { printf("roster: %s: [character %d] sin folder, se ignora\n", c.mod.c_str(), c.sysid); d.chars.erase(d.chars.begin() + i); continue; }
         if (c.donor >= 0 && !vanilla(c.donor)) c.donor = 3;
         i++;
+    }
+    // keyed characters: runtime ids 161.. in key order (the same on every machine with the same mods)
+    std::vector<Char*> ks;
+    for (auto& c : d.chars) if (!c.key.empty()) ks.push_back(&c);
+    std::sort(ks.begin(), ks.end(), [](const Char* a, const Char* b) { return low(a->key) < low(b->key); });
+    for (size_t i = 0; i < ks.size(); i++) {
+        if ((int)i < DYN) { ks[i]->sysid = SYS + (int)i; continue; }
+        printf("roster: %s: %s sin espacio (maximo %d personajes con clave a la vez)\n", ks[i]->mod.c_str(), ks[i]->key.c_str(), DYN);
+        ks[i]->sysid = -1;
+    }
+    d.chars.erase(std::remove_if(d.chars.begin(), d.chars.end(), [](const Char& c) { return c.sysid < 0; }), d.chars.end());
+    dyn_n() = (int)std::min(ks.size(), (size_t)DYN);
+    if (!ks.empty()) printf("roster: %d personajes con clave (ids %d a %d)\n", (int)std::min(ks.size(), (size_t)DYN), SYS, SYS + (int)std::min(ks.size(), (size_t)DYN) - 1);
+    auto ref = [&](const std::string& t, const std::string& who) -> int {   // -2 as in the file, -1 none
+        if (t.empty() || t == "-") return -2;
+        if (t == "none") return -1;
+        char* e = nullptr;
+        long v = strtol(t.c_str(), &e, 10);
+        if (!*e) return v >= 0 && v < SYS ? (int)v : -2;
+        for (auto& c : d.chars) if (low(c.key) == low(t)) return c.sysid;
+        printf("roster: %s: no existe el personaje '%s'\n", who.c_str(), t.c_str());
+        return -2;
+    };
+    for (auto& cell : d.layout) {
+        std::vector<int> nc;
+        for (int v : cell) {
+            if (v >= -1) { nc.push_back(v); continue; }
+            int s = ref(d.keyrefs[-v - 2], d.layout_mod + " [layout]");
+            if (s >= 0) nc.push_back(s);
+        }
+        cell = nc;
+    }
+    d.layout.erase(std::remove_if(d.layout.begin(), d.layout.end(), [](const std::vector<int>& c) { return c.empty(); }), d.layout.end());
+    for (auto& c : d.chars) {
+        std::string who = c.mod + " " + (c.key.empty() ? std::to_string(c.sysid) : c.key);
+        for (int i = 0; i < 4; i++) c.tf[i] = ref(c.tf_key[i], who);
+        for (auto& x : c.vs) x.rid = ref(x.rival, who);
     }
     // a transformation without a name of its own takes its base's, per language
     for (auto& cell : d.layout) for (size_t j = 1; j < cell.size(); j++)

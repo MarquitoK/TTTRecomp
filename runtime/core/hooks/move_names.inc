@@ -6,7 +6,7 @@ uint32_t psp_mv_gen();
 void psp_mv_set_lang(int li);
 static bool mv_wrap(Ctx& c, void (*orig)(Ctx&)) {
     uint32_t id = c.r[4];
-    bool own_name = id >= roster::NAME_OLD && id < roster::NAME_OLD + (uint32_t)roster::K_OLD;
+    bool own_name = (id >= roster::NAME_OLD && id < roster::NAME_OLD + (uint32_t)roster::K_OLD) || roster::rank_of_name(id) >= roster::NEW;
     if (!own_name && (id < 7000 || id >= 32768 || (id >= 10000 && id < 30000))) return false;
     int li = mpm_li(mpm_lang(c));
     psp_mv_set_lang(li);

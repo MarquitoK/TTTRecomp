@@ -5,8 +5,11 @@
 void psp_mods_info(std::string& root, std::vector<std::string>& ids);
 bool psp_disc_pf(uint32_t* count, uint32_t* sectors);
 void psp_disc_pf_buf(uint32_t buf, uint32_t bytes);
+int psp_col_count(int s);
 
-static const int RO_MAX = 0xA7, RO_SYS = 161, RO_RANDOM = 0x46;
+// keyed characters use ids 161..: the group, grid and SFX tables are read from 256-entry copies (story mode keeps the
+// originals: the game uses ids 161.. there for its map objects)
+static const int RO_MAX = roster::MENU_N, RO_SYS = 161, RO_ALL = roster::ALL, RO_RANDOM = 0x46;
 static const uint32_t RO_ROSTER = 0x08A73F60u, RO_IDTAB = 0x08A73EA0u, RO_GRID = 0x08A743E0u, RO_SYSID = 0x08A70588u,
     RO_GROUP = 0x08A69720u, RO_SFX = 0x08A7F38Eu, RO_NAME_A = 0x08A70E90u, RO_NAME_B = 0x08A72100u, RO_VLINE = 0x08A7941Cu,
     RO_VBASE = 0x08A7B690u;
@@ -15,9 +18,9 @@ struct RosterCell { uint8_t ids[5]; int n; };
 struct Roster {
     bool ready = false, custom = false, pf = false;
     std::vector<RosterCell> cells;
-    uint8_t grid[RO_SYS];
-    bool valid[RO_MAX + 1], fresh[RO_MAX + 1];
-    uint32_t tab = 0, idtab = 0, sysid = 0, name_a = 0, name_b = 0, vline = 0, vbase = 0, pfbuf = 0, pf_count = 0, pf_sectors = 0;
+    uint8_t grid[RO_ALL];
+    bool valid[RO_MAX + 1], fresh[RO_MAX + 1], dyn = false, tfs = false;
+    uint32_t grid_t = 0, group_t = 0, sfx_t = 0, tab = 0, idtab = 0, sysid = 0, name_a = 0, name_b = 0, vline = 0, vbase = 0, pfbuf = 0, pf_count = 0, pf_sectors = 0;
     int total = 48, start = 44, nnew = 0;
     uint32_t slider = 0x3E2AAAABu;
 };
@@ -29,7 +32,7 @@ static void ro_build() {
     for (int i = 0; i < 48; i++) for (int j = 0; j < 6; j++) blocks[i][j] = (uint8_t)psp_l32(RO_ROSTER + i * 24 + j * 4);
     uint32_t idt[48];
     for (int i = 0; i < 48; i++) idt[i] = psp_l32(RO_IDTAB + i * 4);
-    for (int i = 0; i < RO_SYS; i++) ro.grid[i] = psp_l8(RO_GRID + i);
+    for (int i = 0; i < RO_ALL; i++) ro.grid[i] = i < RO_SYS ? psp_l8(RO_GRID + i) : 0xFF;
     memset(ro.valid, 0, sizeof(ro.valid));
     memset(ro.fresh, 0, sizeof(ro.fresh));
     for (int i = 0; i < RO_RANDOM; i++) ro.valid[i] = true;
@@ -39,9 +42,12 @@ static void ro_build() {
         roster::load(root, mods);
     }
     const roster::Defs& d = roster::defs();
+    int neb = (int)(psp_l32(0x089F7448u) & 0xFFFF);   // menu numbers the EBOOT's select classes hold (patch_roster.py N)
+    int over = 0;
     if (patch_roster.val)
         for (auto& c : d.chars) {
             int m = roster::menu_of(c.sysid);
+            if (m >= neb) { over++; continue; }
             ro.grid[c.sysid] = (uint8_t)m;
             ro.valid[m] = ro.fresh[m] = true;
             ro.nnew++;
@@ -101,6 +107,7 @@ static void ro_build() {
     for (auto& c : d.chars) {
         if (!patch_roster.val) break;
         int m = roster::menu_of(c.sysid);
+        if (m >= neb) continue;
         bool used = false;
         for (auto& x : cells) for (int j = 0; j < x.n; j++) used = used || x.ids[j] == m;
         if (used || cells.size() >= (size_t)RO_MAX) continue;
@@ -145,6 +152,9 @@ static void ro_build() {
         psp_s32(ro.idtab + i * 4, 0xFFFFFFFFu);
     }
     for (int i = 0; i < RO_SYS; i++) psp_s8(RO_GRID + i, ro.grid[i]);
+    ro.grid_t = psp_reserve(256);
+    memset(psp_p(ro.grid_t), 0xFF, 256);
+    for (int i = 0; i < RO_ALL; i++) psp_s8(ro.grid_t + i, ro.grid[i]);
 
     // per-number and per-group tables: originals copied, new characters added (group k = 70 + rank of the BT3 id)
     ro.sysid = psp_reserve((RO_MAX + 1) * 4);
@@ -155,11 +165,11 @@ static void ro_build() {
         psp_s16(RO_SFX + r.second * 2, psp_l16(RO_SFX + r.first * 2));
     }
     if (!remaps.empty()) printf("roster: %d personajes originales con id BT3 propio\n", (int)remaps.size());
-    ro.name_a = psp_reserve(RO_SYS * 4);
-    ro.name_b = psp_reserve(RO_SYS * 4);
-    ro.vline = psp_reserve(RO_SYS * 126);
-    ro.vbase = psp_reserve(RO_SYS * 2);
-    memset(psp_p(ro.vline), 0xFF, RO_SYS * 126);
+    ro.name_a = psp_reserve(RO_ALL * 4);
+    ro.name_b = psp_reserve(RO_ALL * 4);
+    ro.vline = psp_reserve(RO_ALL * 126);
+    ro.vbase = psp_reserve(RO_ALL * 2);
+    memset(psp_p(ro.vline), 0xFF, RO_ALL * 126);
     for (int k = 0; k < roster::K_OLD; k++) {
         psp_s32(ro.name_a + k * 4, psp_l32(RO_NAME_A + k * 4));
         psp_s32(ro.name_b + k * 4, psp_l32(RO_NAME_B + k * 4));
@@ -178,19 +188,32 @@ static void ro_build() {
         renamed++;
     }
     if (renamed) printf("roster: %d personajes originales con nombre propio\n", renamed);
+    ro.group_t = psp_reserve(256);
+    ro.sfx_t = psp_reserve(512);
+    memset(psp_p(ro.group_t), 0xFF, 256);
+    memset(psp_p(ro.sfx_t), 0xFF, 512);
+    if (over) printf("roster: AVISO: el EBOOT tiene la seleccion para %d numeros (0x%X); %d personajes quedan fuera: ejecuta patchers/patch_roster.py\n", neb, neb, over);
     for (auto& c : d.chars) {
         if (!patch_roster.val) break;
-        int m = roster::menu_of(c.sysid), k = roster::group_of(c.sysid), dk = psp_l8(RO_GROUP + (c.donor >= 0 ? c.donor : 3));
+        if (roster::menu_of(c.sysid) >= neb) continue;
+        int m = roster::menu_of(c.sysid), k = roster::group_of(c.sysid), r = roster::rank(c.sysid), dk = psp_l8(RO_GROUP + (c.donor >= 0 ? c.donor : 3));
         psp_s32(ro.sysid + m * 4, (uint32_t)c.sysid);
-        psp_s8(RO_GROUP + c.sysid, (uint32_t)k);
-        psp_s16(RO_SFX + c.sysid * 2, roster::MODEL_BASE + (uint32_t)(k - roster::K_OLD) * 5 + 4);
-        psp_s32(ro.name_a + k * 4, roster::NAME_ID + (uint32_t)(k - roster::K_OLD));
-        psp_s32(ro.name_b + k * 4, roster::NAME_ID + (uint32_t)(k - roster::K_OLD));
+        if (c.sysid < RO_SYS) {
+            psp_s8(RO_GROUP + c.sysid, (uint32_t)k);
+            psp_s16(RO_SFX + c.sysid * 2, roster::model_entry(r) + 4);
+        }
+        psp_s8(ro.group_t + c.sysid, (uint32_t)k);
+        psp_s16(ro.sfx_t + c.sysid * 2, roster::model_entry(r) + 4);
+        psp_s32(ro.name_a + k * 4, roster::name_of_rank(r));
+        psp_s32(ro.name_b + k * 4, roster::name_of_rank(r));
+        if (roster::keyed(c.sysid)) ro.dyn = true;
+        for (int i = 0; i < 4; i++) ro.tfs = ro.tfs || c.tf[i] >= -1;
         if (dk < roster::K_OLD) {
             for (int j = 0; j < 126; j++) psp_s8(ro.vline + k * 126 + j, psp_l8(RO_VLINE + dk * 126 + j));
             psp_s16(ro.vbase + k * 2, psp_l16(RO_VBASE + dk * 2));
         }
     }
+    for (int s = 0; s < RO_SYS; s++) { psp_s8(ro.group_t + s, psp_l8(RO_GROUP + s)); psp_s16(ro.sfx_t + s * 2, psp_l16(RO_SFX + s * 2)); }
     ro.pf = psp_disc_pf(&ro.pf_count, &ro.pf_sectors);
     if (ro.pf) { ro.pfbuf = psp_reserve(ro.pf_sectors * 2048 + 64); psp_disc_pf_buf(ro.pfbuf, ro.pf_sectors * 2048); }
 
@@ -214,14 +237,83 @@ static void ro_unlock(uint32_t id) {
 }
 
 // PACKFILE index of a group: models 1427 + 5k + colour, voices 4441 + 126k + line; new groups after the original entries
-static uint32_t ro_model(uint32_t v) { uint32_t r = v - 0x593u; return r >= 350u && r < 350u + roster::NEW * 5 ? roster::MODEL_BASE + r - 350u : v; }
-static uint32_t ro_voice(uint32_t v) { uint32_t r = v - 0x1159u; return r >= 8820u && r < 8820u + roster::NEW * 126 ? roster::VOICE_BASE + r - 8820u : v; }
-static bool ro_voice_new(uint32_t idx) { return idx >= roster::VOICE_BASE && idx < roster::PF_COUNT; }
+static const uint32_t RO_M_DYN = 350u + roster::NEW * 5, RO_V_DYN = 8820u + roster::NEW * 126;   // old-range offsets of the first keyed group
+static uint32_t ro_model(uint32_t v) {
+    uint32_t r = v - 0x593u;
+    if (r >= 350u && r < RO_M_DYN) return roster::MODEL_BASE + r - 350u;
+    if (r >= RO_M_DYN && r < RO_M_DYN + (uint32_t)roster::dyn_n() * 5) return roster::DYN_MODEL + r - RO_M_DYN;
+    return v;
+}
+static uint32_t ro_voice(uint32_t v) {
+    uint32_t r = v - 0x1159u;
+    if (r >= 8820u && r < RO_V_DYN) return roster::VOICE_BASE + r - 8820u;
+    if (r >= RO_V_DYN && r < RO_V_DYN + (uint32_t)roster::dyn_n() * 126) return roster::dyn_voice() + r - RO_V_DYN;
+    return v;
+}
+static bool ro_voice_new(uint32_t idx) { return (idx >= roster::VOICE_BASE && idx < roster::PF_COUNT) || (idx >= roster::dyn_voice() && idx < roster::pf_all()); }
+static uint32_t ro_voice_old(uint32_t idx) { return idx >= roster::dyn_voice() ? idx - roster::dyn_voice() + RO_V_DYN : idx - roster::VOICE_BASE + 8820; }   // offset from 0x1159
+
+static bool ro_story() { uint32_t m = psp_l32(0x08A7EA50u); return guest_ptr(m) && psp_l32(m + 0x10) == 5; }
+static bool ro_dyn_on() { return ro.ready && ro.dyn && !ro_story(); }   // never builds the tables: the PACKFILE sites do that first
+static bool ro_live(uint32_t s) { return s >= (uint32_t)RO_SYS && s < (uint32_t)RO_ALL && ro.grid[s] != 0xFF; }
+
+// intro/victory table of a fighter (021_voice_speaker, 161 records of 4 bytes by rival id): a 209-record copy, keyed
+// rivals generic unless the character's roster.txt names a line
+static uint32_t ro_vs(uint32_t p, uint32_t s) {
+    if (!guest_ptr(p)) return p;
+    struct T { uint32_t src, own, out; uint8_t sig[16]; };
+    static std::vector<T> tabs;
+    static size_t next = 0;
+    for (auto& t : tabs) if (t.src == p && t.own == s && !memcmp(t.sig, psp_p(p), 16)) return t.out;
+    size_t i = 0;
+    while (i < tabs.size() && !(tabs[i].src == p && tabs[i].own == s)) i++;
+    if (i == tabs.size()) {
+        if (tabs.size() < 32) tabs.push_back({0, 0, psp_reserve(RO_ALL * 4), {}});
+        else i = next++ % tabs.size();
+    }
+    T& t = tabs[i];
+    t.src = p; t.own = s;
+    memcpy(t.sig, psp_p(p), 16);
+    uint8_t* o = psp_p(t.out);
+    memcpy(o, psp_p(p), RO_SYS * 4);
+    for (int r = RO_SYS; r < RO_ALL; r++) { o[r * 4] = 0xFF; o[r * 4 + 1] = 0; o[r * 4 + 2] = 0xFF; o[r * 4 + 3] = 0; }
+    const roster::Char* ch = s < (uint32_t)RO_ALL ? roster::find((int)s) : nullptr;
+    if (ch)
+        for (auto& x : ch->vs) {
+            if (x.rid < 0 || x.rid >= RO_ALL) continue;
+            o[x.rid * 4 + (x.victory ? 2 : 0)] = (uint8_t)x.line;
+            static int logs = 0;
+            if (logs++ < 12) printf("roster: %s contra %d: linea de %s %d\n", ch->key.empty() ? std::to_string(s).c_str() : ch->key.c_str(), x.rid, x.victory ? "victoria" : "intro", x.line);
+        }
+    return t.out;
+}
+
+// transformation targets of a fighter given by key in roster.txt: written into its loaded params (025, +0xA2)
+static void ro_fighter(uint32_t cb) {
+    if (!ro.ready || !ro.tfs || ro_story() || !guest_ptr(cb)) return;
+    uint32_t slot = psp_l32(cb + 0x2C);
+    if (slot >= 8) return;
+    uint32_t x = psp_l32(0x08B61178u + 4 * slot);
+    if (!guest_ptr(x)) return;
+    uint32_t s = psp_l32(x + 8), p = psp_l32(x + 0x91C);
+    if (s >= (uint32_t)RO_ALL || !guest_ptr(p)) return;
+    const roster::Char* ch = roster::find((int)s);
+    if (!ch) return;
+    for (int i = 0; i < 4; i++) {
+        if (ch->tf[i] < -1) continue;
+        uint8_t v = ch->tf[i] < 0 ? 0xFF : (uint8_t)ch->tf[i];
+        if (psp_l8(p + 0xA2 + i) == v) continue;
+        psp_s8(p + 0xA2 + i, v);
+        static int logs = 0;
+        if (logs++ < 16) printf("roster: %s: transformacion %d -> %d\n", ch->key.empty() ? std::to_string(s).c_str() : ch->key.c_str(), i, (int)v);
+    }
+}
 
 // site kinds: the instruction already ran; its result is replaced
 enum { RO_TAB = 1, RO_IDT, RO_LIMIT, RO_WRAP_A, RO_WRAP_B, RO_PAGE, RO_SLIDER, RO_RAND, RO_RAND_OV, RO_CPU, RO_VALID, RO_SKIP,
        RO_GHOST, RO_AVAIL, RO_SYSID_T, RO_NAME_AT, RO_NAME_BT, RO_VLINE_T, RO_VBASE_T, RO_MODEL, RO_MINV, RO_VOICE, RO_VINV, RO_VSUB,
-       RO_VFLAG, RO_PF_LBN, RO_PF_SEC, RO_PF_CNT, RO_PF_BUF, RO_PF_HDR };
+       RO_VFLAG, RO_PF_LBN, RO_PF_SEC, RO_PF_CNT, RO_PF_BUF, RO_PF_HDR, RO_GROUP_T, RO_GRID_T, RO_SFX_T, RO_ALL_LIM, RO_MODEL_LIM, RO_VS,
+       RO_COLN };
 struct RoSite { uint32_t pc; uint8_t kind, r1, r2; };
 static const RoSite RO_SITES[] = {
     {0x08A0660Cu, RO_TAB}, {0x08A069A8u, RO_TAB}, {0x08A08504u, RO_TAB}, {0x08A08840u, RO_TAB}, {0x08A0889Cu, RO_TAB},
@@ -251,6 +343,13 @@ static const RoSite RO_SITES[] = {
     {0x0882FB84u, RO_PF_BUF}, {0x08830074u, RO_PF_BUF}, {0x088301C0u, RO_PF_BUF}, {0x08830298u, RO_PF_BUF}, {0x08830B8Cu, RO_PF_BUF},
     {0x08831010u, RO_PF_BUF}, {0x08831448u, RO_PF_BUF}, {0x088315D4u, RO_PF_BUF}, {0x0883177Cu, RO_PF_BUF}, {0x08831CC4u, RO_PF_BUF},
     {0x0882FCE8u, RO_PF_HDR},
+    {0x08852B5Cu, RO_GROUP_T}, {0x08852B74u, RO_GROUP_T}, {0x08852BFCu, RO_GROUP_T}, {0x08852C64u, RO_GROUP_T},
+    {0x08A06B84u, RO_GRID_T}, {0x08A088E8u, RO_GRID_T}, {0x089C6D30u, RO_SFX_T},
+    {0x08852B8Cu, RO_ALL_LIM}, {0x08A06B9Cu, RO_ALL_LIM}, {0x08A088DCu, RO_ALL_LIM}, {0x089C6D10u, RO_ALL_LIM}, {0x089C6D1Cu, RO_ALL_LIM},
+    {0x089C6CA4u, RO_MODEL_LIM},
+    {0x089061E8u, RO_VS}, {0x089061F0u, RO_VS}, {0x08906778u, RO_VS}, {0x08906790u, RO_VS}, {0x089068CCu, RO_VS}, {0x089068E4u, RO_VS},
+    {0x0890719Cu, RO_VS}, {0x089071A8u, RO_VS},
+    {0x08A06DA4u, RO_COLN}, {0x08A08A78u, RO_COLN},
 };
 
 void psp_after(uint32_t pc, Ctx& c) {
@@ -263,6 +362,7 @@ void psp_after(uint32_t pc, Ctx& c) {
     uint32_t w = psp_l32(pc);
     int rt = (w >> 16) & 31, rs = (w >> 21) & 31, imm = (int16_t)(w & 0xFFFF), op = w >> 26;
     if (s.kind == RO_RAND_OV && !(op == 0x0D && (w & 0xFFFF) == 0x63)) return;   // overlay sites: only their cell ori (0x63 = none)
+    if (s.kind >= RO_GROUP_T && !ro_dyn_on()) return;
     Roster& r = ro_get();
     switch (s.kind) {
         case RO_TAB: c.r[rt] = r.tab; break;
@@ -296,12 +396,22 @@ void psp_after(uint32_t pc, Ctx& c) {
         case RO_MODEL: if (r.pf) c.r[rt] = ro_model(c.r[rt]); break;
         case RO_MINV:   // a0 = index - 1427 for the k = a0 / 5 that follows
             if (r.pf && c.r[5] >= roster::MODEL_BASE && c.r[5] < roster::VOICE_BASE) c.r[rt] = c.r[5] - roster::MODEL_BASE + 350;
+            else if (r.pf && c.r[5] >= roster::DYN_MODEL && c.r[5] < roster::dyn_voice()) c.r[rt] = c.r[5] - roster::DYN_MODEL + RO_M_DYN;
             break;
         case RO_VOICE: if (r.pf) c.r[rt] = ro_voice(c.r[rt]); break;
         case RO_VINV: case RO_VFLAG:   // index -> group / line: a new voice becomes the old-range offset the code divides by 126
-            if (r.pf && ro_voice_new(c.r[4])) { c.r[4] = c.r[4] - roster::VOICE_BASE + 8820 + 0x1159; c.r[5] = 1; }
+            if (r.pf && ro_voice_new(c.r[4])) { c.r[4] = ro_voice_old(c.r[4]) + 0x1159; c.r[5] = 1; }
             break;
-        case RO_VSUB: if (r.pf && ro_voice_new(c.r[6])) c.r[5] = c.r[6] - roster::VOICE_BASE + 8820; break;
+        case RO_VSUB: if (r.pf && ro_voice_new(c.r[6])) c.r[5] = ro_voice_old(c.r[6]); break;
+        case RO_GROUP_T: if (ro_dyn_on()) c.r[rt] = r.group_t; break;
+        case RO_GRID_T: if (ro_dyn_on()) c.r[rt] = r.grid_t; break;
+        case RO_SFX_T: if (ro_dyn_on()) c.r[rt] = r.sfx_t; break;
+        case RO_ALL_LIM: if (ro_dyn_on()) c.r[rt] = c.r[rs] < (uint32_t)RO_ALL; break;
+        case RO_MODEL_LIM: if (ro_dyn_on() && ro_live(c.r[rs])) c.r[rt] = 1; break;
+        case RO_VS: if (ro_dyn_on()) c.r[rt] = ro_vs(c.r[rt], psp_l32(c.r[rs] + 8)); break;
+        case RO_COLN:
+            if (ro_dyn_on() && ro_live(c.r[2])) { int n = psp_col_count((int)c.r[2]); c.r[rt] = (uint32_t)(n > 0 ? n : 1); }
+            break;
         case RO_PF_LBN: if (r.pf) c.r[rt] = c.r[rs] + r.pf_sectors; break;
         case RO_PF_SEC: if (r.pf) c.r[rt] = r.pf_sectors; break;
         case RO_PF_CNT: if (r.pf) c.r[rt] = r.pf_count; break;

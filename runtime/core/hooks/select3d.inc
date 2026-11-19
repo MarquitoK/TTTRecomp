@@ -58,7 +58,7 @@ static int gen_env(const char* k, int d) { const char* e = getenv(k); return e &
 static int s3d_sys_of_menu(int n) {
     if (n >= 0 && n < roster::K_OLD) return roster::VANILLA[n];
     if (n < roster::FIRST_NEW) return -1;
-    for (int s = 0, r = 0; s < roster::SYS; s++) if (!roster::vanilla(s)) { if (r == n - roster::FIRST_NEW) return roster::find(s) || cr_game_char(s) >= 0 ? s : -1; r++; }
+    for (int s = 0, r = 0; s < roster::ALL; s++) if (!roster::vanilla(s)) { if (r == n - roster::FIRST_NEW) return roster::find(s) || cr_game_char(s) >= 0 ? s : -1; r++; }
     return -1;
 }
 static bool s3d_alive() { return s3d_obj && psp_l32(s3d_obj + 0x40) == s3d_vt; }

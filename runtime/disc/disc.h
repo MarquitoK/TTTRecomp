@@ -1415,7 +1415,7 @@ static void stage_assets(const std::string& root_d) {
 // big render PNG of a character for the SZ portrait: a mod character's Roster big.png, else the select's RHG 184+n (a mod's Shared copy first)
 std::string psp_cr_file(const std::string& rel);
 std::string psp_big_png(int sysid) {
-    if (sysid < 0 || sysid >= roster::SYS) return "";
+    if (sysid < 0 || sysid >= roster::ALL) return "";
     if (!roster::vanilla(sysid)) {
         const roster::Char* c = roster::find(sysid);
         if (!c) return "";
@@ -5188,9 +5188,9 @@ int psp_mv_text(uint32_t id, int lang, std::string& out, uint32_t* orig) {
         out = r->name[l];
         return 1;
     }
-    if (id >= roster::NAME_ID && id < roster::NAME_ID + roster::NEW) {   // name of a new character (name tables of group k)
+    if (roster::rank_of_name(id) >= 0) {   // name of a new character (name tables of group k)
         for (auto& c : roster::defs().chars)
-            if (roster::rank(c.sysid) == (int)(id - roster::NAME_ID)) {
+            if (roster::rank(c.sysid) == roster::rank_of_name(id)) {
                 int l = lang >= 0 && lang < 3 ? lang : 0;
                 if (c.name[l].empty() && c.parent >= 0) {   // transformation of an original: its base's name
                     const roster::Rename* r = roster::renamed(c.parent);
@@ -5222,7 +5222,7 @@ uint32_t psp_mv_gen() { std::lock_guard<std::mutex> g(mv_mx); return mv_gen_n; }
 static const size_t COL_MODEL = 1428;
 static size_t ro_first = (size_t)-1;
 static std::vector<uint8_t> col_found;
-static uint8_t col_n[roster::SYS];
+static uint8_t col_n[roster::ALL];
 static bool col_ready = false;
 // colours 5..10 (Extra 8/10 colours): folders color_5.. next to color_1, appended as entries after the others
 static const int COL_MAX = 10;
@@ -5234,7 +5234,7 @@ static void col_extra(uint8_t* header, uint32_t* distinct) {
     std::vector<size_t> firsts;
     for (int k = 0; k < roster::K_OLD; k++) if (COL_MODEL - 1 + 5 * (size_t)k < disc_pk.size()) firsts.push_back(COL_MODEL - 1 + 5 * (size_t)k);
     if (ro_first != (size_t)-1)
-        for (auto& c : roster::defs().chars) { int r = roster::rank(c.sysid); if (r >= 0 && ro_first + 5 * (size_t)r < disc_pk.size()) firsts.push_back(ro_first + 5 * (size_t)r); }
+        for (auto& c : roster::defs().chars) { int r = roster::rank(c.sysid); size_t f = ro_first + (roster::model_entry(r) - roster::MODEL_BASE); if (r >= 0 && f < disc_pk.size()) firsts.push_back(f); }
     int chars = 0, n0 = 0;
     for (size_t f : firsts) {
         const PkEntry x = disc_pk[f];
@@ -5302,7 +5302,7 @@ static void col_counts() {
         less += col_n[s] < 4;
     }
     if (ro_first != (size_t)-1)
-        for (auto& c : roster::defs().chars) { int r = roster::rank(c.sysid); if (r >= 0) { col_n[c.sysid] = (uint8_t)run(ro_first + 5 * (size_t)r); news++; } }
+        for (auto& c : roster::defs().chars) { int r = roster::rank(c.sysid); if (r >= 0) { col_n[c.sysid] = (uint8_t)run(ro_first + (roster::model_entry(r) - roster::MODEL_BASE)); news++; } }
     for (auto& r : roster::defs().renames) if (r.newid >= 0 && r.newid < roster::SYS && r.newid != r.sysid) col_n[r.newid] = col_n[r.sysid];
     col_ready = true;
     printf("disc: colores dinamicos: %d originales con menos de 4 colores, %d personajes nuevos\n", less, news);
@@ -5763,11 +5763,13 @@ static void roster_entries(uint8_t* header, uint32_t empty_sz, uint32_t* distinc
         vnames.push_back(f.substr(f.find_last_of('/') + 1));
     }
     ro_first = disc_pk.size();
-    for (uint32_t i = roster::MODEL_BASE; i < roster::PF_COUNT; i++) {
+    bool keys = false;
+    for (auto& ch : d.chars) keys = keys || roster::keyed(ch.sysid);
+    for (uint32_t i = roster::MODEL_BASE; i < (keys ? roster::pf_all() : roster::PF_COUNT); i++) {   // keyed groups only when a mod declares one
         PkEntry x;
         x.folder = false; x.sector = x.sector0 = 0; x.cola = 0; x.alt = disc_pk[0x593].alt;   // the original entries' 'no alternate' value
-        bool voice = i >= roster::VOICE_BASE;
-        int k = voice ? (int)(i - roster::VOICE_BASE) / 126 : (int)(i - roster::MODEL_BASE) / 5, j = voice ? (int)(i - roster::VOICE_BASE) % 126 : (int)(i - roster::MODEL_BASE) % 5;
+        bool voice = false;
+        int j = 0, k = roster::entry_rank(i, &j, &voice);
         x.sz = x.size0 = x.real = voice ? empty_sz : 0;
         const roster::Char* c = nullptr;
         for (auto& ch : d.chars) if (roster::rank(ch.sysid) == k) c = &ch;
@@ -5801,6 +5803,7 @@ static void roster_entries(uint8_t* header, uint32_t empty_sz, uint32_t* distinc
     for (size_t j = 0; j < sd.maps.size(); j++) printf("disc: mapa nuevo %d (entrada %u) desde %s: Maps/%s\n", stages::OLD + (int)j, (unsigned)(st_first + 2 * j), sd.maps[j].mod.c_str(), sd.maps[j].id.c_str());
     for (auto& ch : d.chars) printf("disc: personaje nuevo %d (grupo %d, numero 0x%02X) desde %s: %s\n", ch.sysid, roster::group_of(ch.sysid), roster::menu_of(ch.sysid), ch.mod.c_str(), ch.folder.c_str());
     printf("disc: PACKFILE ampliado a %u entradas, datos en el sector %u\n", n, disc_pk_data);
+    if (n >= 32000) printf("disc: AVISO: %u entradas, el juego usa indices de 16 bits (maximo 32767)\n", n);
 }
 
 // a new character without SFX or voices of its own uses its base character's folder for them (never for colours)
@@ -6412,7 +6415,7 @@ bool psp_disc_blink(uint32_t idx) {
     return false;
 }
 int psp_cr_map() { return disc_ready && cr_map_index != (size_t)-1 ? (int)cr_map_index : -1; }
-int psp_col_count(int s) { return col_ready && s >= 0 && s < roster::SYS ? col_n[s] : 0; }
+int psp_col_count(int s) { return col_ready && s >= 0 && s < roster::ALL ? col_n[s] : 0; }
 // first enabled mod (priority order) that has the file
 std::string psp_cr_file(const std::string& rel) {
     std::error_code ec;
@@ -6463,6 +6466,7 @@ std::string psp_pak_char_dir(uint32_t pak) {
     size_t i = (size_t)idx;
     if (i >= 0x593 && i < 0x593 + 350) i = 0x593 + (i - 0x593) / 5 * 5 + 4;
     else if (i >= roster::MODEL_BASE && i < roster::VOICE_BASE) i = roster::MODEL_BASE + (i - roster::MODEL_BASE) / 5 * 5 + 4;
+    else if (i >= roster::DYN_MODEL && i < roster::dyn_voice()) i = roster::DYN_MODEL + (i - roster::DYN_MODEL) / 5 * 5 + 4;
     if (i >= disc_pk.size()) return "";
     std::string f = disc_pk[i].fpath;
     size_t c = f.find("/color_");

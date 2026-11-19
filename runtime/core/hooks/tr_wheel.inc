@@ -1,3 +1,4 @@
+#include "disc/roster_def.h"
 // transformation wheel (SZ): params [[0x08B61178 + 4*slot] + 0x91C]; tw_act: -1 empty, 0..3 transformation i, 10..12 fusion i
 // pages: 0 transformations, 1 Metamoru (fusion class 1), 2 Potara (class 2); pieces AGS 298 + RHG 299 (0 ring, 1 empty, 2 locked,
 // 3 centre, 4..15 portraits page*4 + position, filled by disc/renders.h)
@@ -61,7 +62,7 @@ static void tw_tick(const Ctx& c, uint32_t f) {
     bool cells = false;
     for (int g = 0; g < 3; g++) for (int s = 0; s < 4; s++) {
         tw_act[g][s] = act[g][s]; tw_tgt[g][s] = tgt[g][s]; tw_cost[g][s] = cost[g][s];
-        int v = tgt[g][s] >= 0 && tgt[g][s] < 161 ? tgt[g][s] : -1;
+        int v = tgt[g][s] >= 0 && tgt[g][s] < roster::ALL ? tgt[g][s] : -1;
         if (tw_cell[g * 4 + s] != v) { tw_cell[g * 4 + s] = v; cells = true; }
     }
     if (cells) tw_cell_epoch = tw_cell_epoch + 1;
