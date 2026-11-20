@@ -271,13 +271,57 @@ static std::wstring pe_item_name(int file, int i) { PeFile& pf = pe_files[file];
 static std::wstring pe_char_name(long long v) { return v == 255 || v < 0 ? L"None" : v < roster::SYS ? mw_w(re_bt3_name((int)v)) : L"Id " + std::to_wstring(v); }
 
 // ---------------- card view (painted; menus, the character picker and an inline box for numbers) ----------------
-enum { EL_CARD, EL_LABEL, EL_NOTE, EL_CHAR, EL_LIST, EL_NUM, EL_TOGGLE, EL_SWATCH, EL_CHIP, EL_SLIDER, EL_EXPAND, EL_COST, EL_PLAY };
+enum { EL_CARD, EL_LABEL, EL_NOTE, EL_CHAR, EL_LIST, EL_NUM, EL_TOGGLE, EL_SWATCH, EL_CHIP, EL_SLIDER, EL_EXPAND, EL_COST, EL_PLAY, EL_VSNUM };
 struct PeEl { int kind = 0, x = 0, y = 0, w = 0, h = 0, field = -1, item = 0, bit = -1, tag = 0; double lo = 0, hi = 0; std::wstring t, hint; bool on = false; };
 static std::vector<PeEl> pe_els;
 static std::vector<int> pe_card_y;   // y of each card (jump buttons)
 static HWND pe_view = nullptr, pe_box = nullptr;
 static int pe_hot = -1, pe_drag = -1, pe_scroll = 0, pe_content = 0, pe_box_el = -1, pe_attack = 0, pe_rival = 0, pe_adv_file = 17, pe_adv_item = 0, pe_vlang = -1;
 static bool pe_more_tf = false, pe_more_fu = false, pe_adv_open = false, pe_tracking = false;
+// characters with a key (ids 161..): targets and rivals of a new character go to its roster.txt block, not to the param files
+static ReRefs* pe_refs(bool make) { if (pe_s < 0) return nullptr; auto it = re_refs.find(pe_s); return it != re_refs.end() ? &it->second : make ? &re_refs[pe_s] : nullptr; }
+static void pe_refs_tidy() { auto it = re_refs.find(pe_s); if (it != re_refs.end() && !it->second.any()) re_refs.erase(it); }
+static int pe_ref_slot(const PeField& x) {   // 0..3 transformation, 10 + 2 i fusion result, 11 + 2 i fusion partner, -1 none
+    const std::string& k = x.key;
+    if (k.size() == 3 && !k.compare(0, 2, "tf") && k[2] >= '1' && k[2] <= '4') return k[2] - '1';
+    if (k.size() >= 3 && !k.compare(0, 2, "fu") && k[2] >= '1' && k[2] <= '3') {
+        std::string r = k.substr(3);
+        if (r.empty()) return 10 + 2 * (k[2] - '1');
+        if (r == (pe_game ? "_t1" : "_p")) return 11 + 2 * (k[2] - '1');
+    }
+    return -1;
+}
+static std::string* pe_ref_of(int slot, bool make) {
+    ReRefs* r = slot >= 0 ? pe_refs(make) : nullptr;
+    if (!r) return nullptr;
+    return slot < 4 ? &r->tfk[slot] : &r->fuk[(slot - 10) / 2][(slot - 10) % 2];
+}
+static int pe_key_sys(const std::string& k) { for (auto& c : re_chars) if (c.keyed && roster::low(c.id) == roster::low(k)) return c.sysid; return -1; }
+static std::wstring pe_ref_name(const std::string& k) {
+    if (k == "none") return L"None";
+    int s = pe_key_sys(k);
+    if (s >= 0) return mw_w(re_label(s));
+    char* e = nullptr; long v = strtol(k.c_str(), &e, 10);
+    return !*e ? pe_char_name(v) : mw_w(k);
+}
+static roster::VsLine* pe_vs(bool victory) {
+    ReRefs* c = pe_refs(false);
+    if (!c || pe_rival < roster::SYS) return nullptr;
+    ReChar* r = re_find(pe_rival);
+    if (!r) return nullptr;
+    for (auto& v : c->vs) if (v.victory == victory && roster::low(v.rival) == roster::low(r->id)) return &v;
+    return nullptr;
+}
+static long long pe_vs_get(bool victory) { roster::VsLine* v = pe_vs(victory); return v ? v->line : 255; }
+static void pe_vs_set(bool victory, long long n) {
+    ReChar* r = re_find(pe_rival);
+    ReRefs* c = r ? pe_refs(true) : nullptr;
+    if (!c) return;
+    for (size_t i = 0; i < c->vs.size(); i++) if (c->vs[i].victory == victory && roster::low(c->vs[i].rival) == roster::low(r->id)) { c->vs.erase(c->vs.begin() + i); break; }
+    if (n >= 0 && n < 255) { roster::VsLine v; v.rival = r->id; v.line = (int)n; v.victory = victory; c->vs.push_back(v); }
+    pe_refs_tidy();
+}
+
 static const wchar_t* PE_CARDS[7] = {L"Transformations", L"Fusions", L"Aura", L"Attacks", L"Movement", L"Interactions", L"Advanced"};
 static const COLORREF PE_AURA[11] = {RGB(241, 239, 232), RGB(127, 119, 221), RGB(239, 159, 39), RGB(226, 75, 74), RGB(99, 153, 34), RGB(55, 138, 221), RGB(212, 83, 126), RGB(43, 79, 176), RGB(245, 208, 74), RGB(232, 183, 48), RGB(192, 57, 43)};
 static const int PE_W = 690;
@@ -454,7 +498,8 @@ static void pe_layout() {
     {
         int fi = pe_fk("vs_intro"), fw = pe_fk("vs_win"), n = pe_items(21);
         if (fi >= 0 && n > 0) {
-            if (pe_rival < 0 || pe_rival >= n) {   // the first rival with a line of its own
+            ReRefs* nc = pe_refs(false);
+            if (pe_rival < 0 || (pe_rival >= n && !(re_find(pe_rival) && pe_rival >= roster::SYS))) {   // the first rival with a line of its own
                 pe_rival = 0;
                 for (int i = 0; i < n; i++) if (pe_get(pe_f[fi], i) != 255 || (fw >= 0 && pe_get(pe_f[fw], i) != 255)) { pe_rival = i; break; }
             }
@@ -466,6 +511,15 @@ static void pe_layout() {
                 if (x + w > PE_W - 14) { x = 18; pe_y += 34; }
                 PeEl& c = pe_add(EL_CHIP, x, pe_y, w, 28, t); c.tag = 21; c.item = i; c.on = i == pe_rival;
                 x += w + 8; shown++;
+            }
+            std::set<int> kr;   // rivals with a key: from the character's lines, plus the one being edited
+            if (nc) { for (auto& v : nc->vs) { int s = pe_key_sys(v.rival); if (s >= 0) kr.insert(s); } if (pe_rival >= roster::SYS) kr.insert(pe_rival); }
+            for (int s : kr) {
+                std::wstring t = mw_w(re_label(s));
+                int w = 26 + (int)t.size() * 7;
+                if (x + w > PE_W - 14) { x = 18; pe_y += 34; }
+                PeEl& c = pe_add(EL_CHIP, x, pe_y, w, 28, t); c.tag = 21; c.item = s; c.on = s == pe_rival;
+                x += w + 8;
             }
             int w = 120;
             if (x + w > PE_W - 14) { x = 18; pe_y += 34; }
@@ -486,15 +540,26 @@ static void pe_layout() {
                 pe_y += 38;
             }
             int ry = pe_y;
-            pe_row(L"Intro line", fi, pe_rival, EL_NUM, 88);
-            if (pe_y > ry) {
+            if (pe_rival >= roster::SYS) {   // a rival with a key: lines kept in roster.txt
+                for (int v = 0; v < 2; v++) {
+                    pe_add(EL_LABEL, 18, pe_y, 170, 28, v ? L"Victory line" : L"Intro line");
+                    PeEl& b = pe_add(EL_VSNUM, 196, pe_y + 1, 88, 26); b.tag = v;
+                    PeEl& p = pe_add(EL_PLAY, 292, pe_y + 1, 34, 26); p.tag = 100 + v;
+                    pe_y += 34;
+                }
+                ry = -1;
+            }
+            if (ry >= 0) pe_row(L"Intro line", fi, pe_rival, EL_NUM, 88);
+            if (ry >= 0 && pe_y > ry) {
                 pe_add(EL_PLAY, 292, ry + 1, 34, 26, L"", fi, pe_rival);
                 int ft = pe_fk("vs_first");
                 if (ft >= 0 && pe_fits(pe_f[ft], pe_rival)) { PeEl& t = pe_add(EL_TOGGLE, 344, ry + 1, 34 + 17 * 7, 26, L"Rival talks first", ft, pe_rival); t.bit = 0; }
             }
-            ry = pe_y;
-            pe_row(L"Victory line", fw, pe_rival, EL_NUM, 88);
-            if (pe_y > ry) pe_add(EL_PLAY, 292, ry + 1, 34, 26, L"", fw, pe_rival);
+            if (ry >= 0) {
+                ry = pe_y;
+                pe_row(L"Victory line", fw, pe_rival, EL_NUM, 88);
+                if (pe_y > ry) pe_add(EL_PLAY, 292, ry + 1, 34, 26, L"", fw, pe_rival);
+            }
         } else { pe_add(EL_NOTE, 18, pe_y, 600, 26, L"This character has no interactions file."); pe_y += 32; }
     }
     pe_card_end();
@@ -594,8 +659,11 @@ static void pe_paint(HDC dc, RECT cr) {
                 if (e.tag == 300) t = std::to_wstring(pe_adv_file) + L"  " + pe_files[pe_adv_file].title;
                 else if (e.tag == 301) t = pe_files[pe_adv_file].item + L":  " + pe_item_name(pe_adv_file, pe_adv_item);
                 else if (f) { long long v = pe_get(*f, e.item); t = e.kind == EL_COST ? pe_cost_text(v) : pe_val_text(*f, e.item, v); }
+                std::string* rk = f ? pe_ref_of(pe_ref_slot(*f), false) : nullptr;
+                bool byk = rk && !rk->empty();
+                if (byk) t = pe_ref_name(*rk);
                 RECT tr = {x + E(12), y, x + w - E(26), y + h};
-                pe_text(dc, t, tr, f && pe_changed(*f, e.item) ? THEME_ACCENT : THEME_TEXT, theme_f_normal);
+                pe_text(dc, t, tr, byk || (f && pe_changed(*f, e.item)) ? THEME_ACCENT : THEME_TEXT, theme_f_normal);
                 RECT ar = {x + w - E(24), y, x + w - E(8), y + h};
                 pe_text(dc, L"\x25BE", ar, THEME_TEXT2, theme_f_normal, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
                 break;
@@ -629,8 +697,16 @@ static void pe_paint(HDC dc, RECT cr) {
                 SelectObject(dc, ob); SelectObject(dc, op); DeleteObject(br); DeleteObject(p);
                 break;
             }
+            case EL_VSNUM: {
+                pe_round(dc, x, y, w, h, E(8), THEME_FIELD, hot ? THEME_ACCENT : THEME_BORDER);
+                if (i == pe_box_el) break;
+                long long v = pe_vs_get(e.tag == 1);
+                RECT tr = {x + E(10), y, x + w - E(8), y + h};
+                pe_text(dc, v == 255 ? L"None" : std::to_wstring(v), tr, v == 255 ? THEME_TEXT : THEME_ACCENT, theme_f_normal);
+                break;
+            }
             case EL_PLAY: {
-                bool none = pe_get(*f, e.item) == 255;
+                bool none = (f ? pe_get(*f, e.item) : pe_vs_get(e.tag == 101)) == 255;
                 pe_round(dc, x, y, w, h, E(10), hot && !none ? PE_PILL_HOT : PE_PILL, hot && !none ? THEME_ACCENT : THEME_BORDER);
                 pe_text(dc, L"\x25B6", r, none ? THEME_TEXT2 : THEME_TEXT, theme_f_normal, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
                 break;
@@ -676,7 +752,12 @@ static void pe_box_close(bool keep) {
     if (!pe_box) return;
     HWND b = pe_box; pe_box = nullptr;
     int i = pe_box_el; pe_box_el = -1;
-    if (keep && i >= 0 && i < (int)pe_els.size() && pe_els[i].field >= 0) {
+    if (keep && i >= 0 && i < (int)pe_els.size() && pe_els[i].kind == EL_VSNUM) {
+        wchar_t t[64] = L""; GetWindowTextW(b, t, 64);
+        wchar_t* end = nullptr;
+        long long v = wcstoll(t, &end, 10);
+        pe_vs_set(pe_els[i].tag == 1, end != t && !*end ? std::max(0LL, std::min(254LL, v)) : 255);
+    } else if (keep && i >= 0 && i < (int)pe_els.size() && pe_els[i].field >= 0) {
         const PeField& x = pe_f[pe_els[i].field];
         wchar_t t[64] = L""; GetWindowTextW(b, t, 64);
         std::wstring s = t;
@@ -735,20 +816,21 @@ static void pe_menu_list(int i, POINT p) {
     else pe_put(pe_f[e.field], e.item, (uint32_t)v);
     pe_changed_now();
 }
-static int pe_pick_char(const std::wstring& title, bool none = true) {   // the select screen's characters, None last; -1 cancelled, 255 None
+static int pe_pick_char(const std::wstring& title, bool none = true, bool keyed = false) {   // the select screen's characters, None last; -1 cancelled, 255 None
     std::vector<int> v;
     std::set<int> seen;
-    auto add = [&](int s) { if (s >= 0 && s < roster::SYS && seen.insert(s).second) v.push_back(s); };
+    auto add = [&](int s) { if (s >= 0 && (s < roster::SYS || (keyed && re_find(s))) && seen.insert(s).second) v.push_back(s); };
     for (auto& c : re_cells) for (int s : c) add(s);
     for (auto& c : re_chars) add(c.sysid);
     for (int s : roster::VANILLA) add(s);
     if (none) v.push_back(RE_P_NONE);
     int s = re_picker(title, v);
     if (s == RE_P_NONE) return 255;
-    return s >= 0 && s < roster::SYS ? s : -1;
+    return s >= 0 && (s < roster::SYS || (keyed && re_find(s))) ? s : -1;
 }
 static void pe_play(const PeEl& e) {
-    long long v = pe_get(pe_f[e.field], e.item);
+    long long v = e.field >= 0 ? pe_get(pe_f[e.field], e.item) : 255;
+    if (e.field < 0) v = pe_vs_get(e.tag == 101);
     if (v == 255) { cm_notify(L"None: the game plays one of its generic lines"); return; }
     std::string p = psp_voice_wav(pe_s, (int)v + 6, pe_vlang);
     printf("roster: voz de prueba de %d, linea %lld, idioma %d: %s\n", pe_s, v, pe_vlang, p.empty() ? "sin archivo" : p.c_str());
@@ -759,8 +841,14 @@ static void pe_click(int i, POINT scr, int mx) {
     PeEl& e = pe_els[i];
     switch (e.kind) {
         case EL_CHAR: {
-            int s = pe_pick_char(L"Character");
-            if (s >= 0) { pe_put(pe_f[e.field], e.item, (uint32_t)s); pe_changed_now(); }
+            int slot = pe_ref_slot(pe_f[e.field]);
+            int s = pe_pick_char(L"Character", true, slot >= 0);
+            if (s < 0) break;
+            bool key = s >= roster::SYS && s != 255;
+            if (std::string* rk = pe_ref_of(slot, key)) *rk = key ? re_find(s)->id : "";
+            pe_refs_tidy();
+            if (!key) pe_put(pe_f[e.field], e.item, (uint32_t)s);
+            pe_changed_now();
             break;
         }
         case EL_LIST: case EL_COST: pe_menu_list(i, scr); break;
@@ -778,7 +866,7 @@ static void pe_click(int i, POINT scr, int mx) {
             if (e.tag == 23) pe_attack = e.item;
             else if (e.tag == 21) pe_rival = e.item;
             else if (e.tag == 22) pe_vlang = e.item;
-            else if (e.tag == 210) { int s = pe_pick_char(L"Rival", false); if (s >= 0 && s < 255 && s < pe_items(21)) pe_rival = s; }
+            else if (e.tag == 210) { int s = pe_pick_char(L"Rival", false, true); if (s >= 0 && s != 255 && (s < pe_items(21) || s >= roster::SYS)) pe_rival = s; }
             pe_changed_now();
             break;
         case EL_EXPAND:
@@ -786,6 +874,16 @@ static void pe_click(int i, POINT scr, int mx) {
             pe_changed_now();
             break;
         case EL_SLIDER: pe_drag = i; SetCapture(pe_view); pe_set_slider(i, mx); break;
+        case EL_VSNUM: {
+            long long v = pe_vs_get(e.tag == 1);
+            pe_box_el = i;
+            pe_box = CreateWindowExW(0, L"EDIT", (v == 255 ? std::wstring(L"None") : std::to_wstring(v)).c_str(), WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL, E(e.x + 8), E(e.y + 4) - pe_scroll, E(e.w - 14), E(e.h - 8), pe_view, nullptr, GetModuleHandle(nullptr), nullptr);
+            SendMessageW(pe_box, WM_SETFONT, (WPARAM)theme_f_normal, TRUE);
+            SendMessageW(pe_box, EM_SETSEL, 0, -1);
+            SetFocus(pe_box);
+            InvalidateRect(pe_view, nullptr, FALSE);
+            break;
+        }
         case EL_NUM: {
             const PeField& x = pe_f[e.field];
             long long v = pe_get(x, e.item);

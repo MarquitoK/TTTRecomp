@@ -30,8 +30,8 @@ static const uint8_t VANILLA[K_OLD] = {3, 4, 5, 6, 13, 14, 15, 16, 17, 18, 19, 2
 // select screen labels: [kind][lang] kind 0 name, 1 form right, 2 form left; lang 0 en, 1 es, 2 unused, 3 all; -2 unset, -1 empty, >= 0 a BT3 id
 struct Labels { int ref[3][4] = {{-2, -2, -2, -2}, {-2, -2, -2, -2}, {-2, -2, -2, -2}}; };
 struct VsLine { std::string rival; int rid = -2, line = 0; bool victory = false; };   // intro/victory line against a rival (key or BT3 id)
-struct Char { int sysid = -1, donor = 3, parent = -1; std::string mod, id, folder, name[3], form_old[2], key, tf_key[4]; int form = -2, tf[4] = {-2, -2, -2, -2}; Labels lab; std::vector<VsLine> vs; };   // form: transformation text id (names as text), -1 none, -2 unset; tf: transformation targets (-2 as in the file, -1 none)
-struct Rename { int sysid = -1, newid = -1, form = -2; std::string mod, name[3], form_old[2]; Labels lab; };   // an original character: own names, own BT3 id
+struct Char { int sysid = -1, donor = 3, parent = -1; std::string mod, id, folder, name[3], form_old[2], key, tf_key[4], fu_key[3][2]; int form = -2, tf[4] = {-2, -2, -2, -2}, fu[3][2] = {{-2, -2}, {-2, -2}, {-2, -2}}; Labels lab; std::vector<VsLine> vs; };   // fu: fusion result and partner   // form: transformation text id (names as text), -1 none, -2 unset; tf: transformation targets (-2 as in the file, -1 none)
+struct Rename { int sysid = -1, newid = -1, form = -2; std::string mod, name[3], form_old[2], tf_key[4], fu_key[3][2]; int tf[4] = {-2, -2, -2, -2}, fu[3][2] = {{-2, -2}, {-2, -2}, {-2, -2}}; Labels lab; std::vector<VsLine> vs; };   // an original character: own names, own BT3 id
 struct Defs {
     bool loaded = false;
     std::vector<Char> chars;
@@ -141,6 +141,34 @@ inline std::string trim(const std::string& s) {
 
 // [layout]: one cell per line, BT3 ids (base then forms) or "random"; [character N]: id (folder Characters/<id>), name_en/es,
 // base (SFX and voices when the mod has none; "none"); [original N] (or [name N]): names and bt3_id of an original character
+// characters named by key or id: transform = A, B, C, D (or transform_1..4), fusion_1..3 = result : partner, intro / victory = rival : line
+inline bool ref_key(const std::string& k, const std::string& v, std::string* tf_key, std::string (*fu_key)[2], std::vector<VsLine>& vs) {
+    if (k == "transform") {
+        size_t p0 = 0;
+        for (int i = 0; i < 4 && p0 <= v.size(); i++) {
+            size_t q = v.find(',', p0);
+            tf_key[i] = trim(v.substr(p0, q == std::string::npos ? std::string::npos : q - p0));
+            if (q == std::string::npos) break;
+            p0 = q + 1;
+        }
+        return true;
+    }
+    if (k.size() == 11 && k.compare(0, 10, "transform_") == 0 && k[10] >= '1' && k[10] <= '4') { tf_key[k[10] - '1'] = v; return true; }
+    if (k.size() == 8 && k.compare(0, 7, "fusion_") == 0 && k[7] >= '1' && k[7] <= '3') {
+        size_t c2 = v.find(':');
+        fu_key[k[7] - '1'][0] = trim(v.substr(0, c2));
+        fu_key[k[7] - '1'][1] = c2 == std::string::npos ? "" : trim(v.substr(c2 + 1));
+        return true;
+    }
+    if (k == "intro" || k == "victory") {
+        size_t c2 = v.find(':');
+        if (c2 == std::string::npos) return true;
+        VsLine x; x.rival = trim(v.substr(0, c2)); x.line = atoi(trim(v.substr(c2 + 1)).c_str()); x.victory = k == "victory";
+        vs.push_back(x);
+        return true;
+    }
+    return false;
+}
 inline void read_file(const std::string& path, const std::string& mod, bool take_layout, Defs& d) {
     FILE* f = fopen(path.c_str(), "rb");
     if (!f) return;
@@ -232,7 +260,7 @@ inline void read_file(const std::string& path, const std::string& mod, bool take
             else if (k == "bt3_id") ren->newid = atoi(v.c_str());
             else if (k == "form_en" || k == "form_es") ren->form_old[k == "form_es"] = v;
             else if (k == "form") ren->form = v == "none" ? -1 : atoi(v.c_str());
-            else label_key(k, v, ren->lab);
+            else if (!ref_key(k, v, ren->tf_key, ren->fu_key, ren->vs)) label_key(k, v, ren->lab);
         } else if (sec == 2 && cur) {
             size_t eq = s.find('=');
             if (eq == std::string::npos) continue;
@@ -244,23 +272,7 @@ inline void read_file(const std::string& path, const std::string& mod, bool take
             else if (k == "voice_donor" || k == "base") cur->donor = v == "none" ? -1 : atoi(v.c_str());
             else if (k == "form_en" || k == "form_es") cur->form_old[k == "form_es"] = v;
             else if (k == "form") cur->form = v == "none" ? -1 : atoi(v.c_str());
-            else if (k == "transform") {
-                size_t p0 = 0;
-                for (int i = 0; i < 4 && p0 <= v.size(); i++) {
-                    size_t q = v.find(',', p0);
-                    cur->tf_key[i] = trim(v.substr(p0, q == std::string::npos ? std::string::npos : q - p0));
-                    if (q == std::string::npos) break;
-                    p0 = q + 1;
-                }
-            }
-            else if (k.size() == 11 && k.compare(0, 10, "transform_") == 0 && k[10] >= '1' && k[10] <= '4') cur->tf_key[k[10] - '1'] = v;
-            else if (k == "intro" || k == "victory") {
-                size_t c2 = v.find(':');
-                if (c2 == std::string::npos) continue;
-                VsLine x; x.rival = trim(v.substr(0, c2)); x.line = atoi(trim(v.substr(c2 + 1)).c_str()); x.victory = k == "victory";
-                cur->vs.push_back(x);
-            }
-            else label_key(k, v, cur->lab);
+            else if (!ref_key(k, v, cur->tf_key, cur->fu_key, cur->vs)) label_key(k, v, cur->lab);
         }
     }
     fclose(f);
@@ -328,7 +340,14 @@ inline void load(const std::string& root, const std::vector<std::string>& ids) {
     for (auto& c : d.chars) {
         std::string who = c.mod + " " + (c.key.empty() ? std::to_string(c.sysid) : c.key);
         for (int i = 0; i < 4; i++) c.tf[i] = ref(c.tf_key[i], who);
+        for (int i = 0; i < 3; i++) for (int j = 0; j < 2; j++) c.fu[i][j] = ref(c.fu_key[i][j], who);
         for (auto& x : c.vs) x.rid = ref(x.rival, who);
+    }
+    for (auto& r : d.renames) {
+        std::string who = r.mod + " original " + std::to_string(r.sysid);
+        for (int i = 0; i < 4; i++) r.tf[i] = ref(r.tf_key[i], who);
+        for (int i = 0; i < 3; i++) for (int j = 0; j < 2; j++) r.fu[i][j] = ref(r.fu_key[i][j], who);
+        for (auto& x : r.vs) x.rid = ref(x.rival, who);
     }
     // a transformation without a name of its own takes its base's, per language
     for (auto& cell : d.layout) for (size_t j = 1; j < cell.size(); j++)

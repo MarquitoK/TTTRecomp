@@ -497,7 +497,7 @@ static void cm_load_mod(int k) {
     cm_fill();
     re_rebuild();
     se_rebuild();
-    cm_notify(L"Editing " + mw_w(mod) + L": Save writes over the installed mod");
+    cm_notify(L"");
 }
 
 static void cm_place(int id, int x, int y, int w, int h) { MoveWindow(GetDlgItem(cm, id), E(x), E(y), E(w), E(h), TRUE); }
@@ -517,7 +517,8 @@ static void cm_select_tab(int k) {
         if (y + h > mi.rcWork.bottom) y = std::max((int)mi.rcWork.top, (int)mi.rcWork.bottom - h);
     }
     SetWindowPos(cm, nullptr, x, y, w, h, SWP_NOZORDER | SWP_NOACTIVATE);
-    cm_place(IDC_NOTICE, CM_RAIL + 16, H - 40, k >= 1 ? 684 : W - CM_RAIL - 32, 28);
+    bool chars = k == 1 && re_view == 0;   // Characters: the list fills the left column, messages go under the cards
+    cm_place(IDC_NOTICE, chars ? 412 : CM_RAIL + 16, H - 40, chars ? 852 : k >= 1 ? 684 : W - CM_RAIL - 32, 28);
     cm_place(IDC_SAVE, 12, H - 130, 144, 32);
     cm_place(IDC_CREATE, 12, H - 92, 144, 32);
     cm_place(IDC_CLOSE, 12, H - 54, 144, 32);

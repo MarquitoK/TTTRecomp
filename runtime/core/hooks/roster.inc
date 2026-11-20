@@ -177,6 +177,10 @@ static void ro_build() {
         psp_s16(ro.vbase + k * 2, psp_l16(RO_VBASE + k * 2));
     }
     for (int k = 0; k < roster::K_OLD; k++) roster::name_orig()[k] = psp_l32(RO_NAME_A + k * 4);
+    for (auto& rn : d.renames) {   // originals that name a transformation or fusion by key
+        for (int i = 0; i < 4; i++) ro.tfs = ro.tfs || rn.tf[i] >= -1;
+        for (auto& f : rn.fu) ro.tfs = ro.tfs || f[0] >= -1 || f[1] >= -1;
+    }
     int renamed = 0;
     for (auto& rn : d.renames) {   // an original character with its own name: one port text id per group
         if (!patch_roster.val) break;
@@ -208,6 +212,7 @@ static void ro_build() {
         psp_s32(ro.name_b + k * 4, roster::name_of_rank(r));
         if (roster::keyed(c.sysid)) ro.dyn = true;
         for (int i = 0; i < 4; i++) ro.tfs = ro.tfs || c.tf[i] >= -1;
+        for (auto& f : c.fu) ro.tfs = ro.tfs || f[0] >= -1 || f[1] >= -1;
         if (dk < roster::K_OLD) {
             for (int j = 0; j < 126; j++) psp_s8(ro.vline + k * 126 + j, psp_l8(RO_VLINE + dk * 126 + j));
             psp_s16(ro.vbase + k * 2, psp_l16(RO_VBASE + dk * 2));
@@ -257,6 +262,15 @@ static bool ro_story() { uint32_t m = psp_l32(0x08A7EA50u); return guest_ptr(m) 
 static bool ro_dyn_on() { return ro.ready && ro.dyn && !ro_story(); }   // never builds the tables: the PACKFILE sites do that first
 static bool ro_live(uint32_t s) { return s >= (uint32_t)RO_SYS && s < (uint32_t)RO_ALL && ro.grid[s] != 0xFF; }
 
+// characters given by key or id in roster.txt: a new character's block or an original's [original N]
+struct RoRefs { const int* tf = nullptr; const int (*fu)[2] = nullptr; const std::vector<roster::VsLine>* vs = nullptr; std::string who; };
+static RoRefs ro_refs(uint32_t s) {
+    RoRefs r;
+    if (s >= (uint32_t)RO_ALL) return r;
+    if (const roster::Char* c = roster::find((int)s)) { r.tf = c->tf; r.fu = c->fu; r.vs = &c->vs; r.who = c->key.empty() ? std::to_string(s) : c->key; }
+    else if (const roster::Rename* n = roster::renamed((int)s)) { r.tf = n->tf; r.fu = n->fu; r.vs = &n->vs; r.who = std::to_string(s); }
+    return r;
+}
 // intro/victory table of a fighter (021_voice_speaker, 161 records of 4 bytes by rival id): a 209-record copy, keyed
 // rivals generic unless the character's roster.txt names a line
 static uint32_t ro_vs(uint32_t p, uint32_t s) {
@@ -277,15 +291,36 @@ static uint32_t ro_vs(uint32_t p, uint32_t s) {
     uint8_t* o = psp_p(t.out);
     memcpy(o, psp_p(p), RO_SYS * 4);
     for (int r = RO_SYS; r < RO_ALL; r++) { o[r * 4] = 0xFF; o[r * 4 + 1] = 0; o[r * 4 + 2] = 0xFF; o[r * 4 + 3] = 0; }
-    const roster::Char* ch = s < (uint32_t)RO_ALL ? roster::find((int)s) : nullptr;
-    if (ch)
-        for (auto& x : ch->vs) {
+    RoRefs rf = ro_refs(s);
+    if (rf.vs)
+        for (auto& x : *rf.vs) {
             if (x.rid < 0 || x.rid >= RO_ALL) continue;
             o[x.rid * 4 + (x.victory ? 2 : 0)] = (uint8_t)x.line;
             static int logs = 0;
-            if (logs++ < 12) printf("roster: %s contra %d: linea de %s %d\n", ch->key.empty() ? std::to_string(s).c_str() : ch->key.c_str(), x.rid, x.victory ? "victoria" : "intro", x.line);
+            if (logs++ < 12) printf("roster: %s contra %d: linea de %s %d\n", rf.who.c_str(), x.rid, x.victory ? "victoria" : "intro", x.line);
         }
     return t.out;
+}
+
+// life and ki per character ([[0x08A7DBC8]+0x30], 16-byte records by id, 161 in the game): a 209-record copy, a keyed
+// character takes the record of its base character (base =, Goku when none)
+static uint32_t ro_life(uint32_t p) {
+    if (!guest_ptr(p)) return p;
+    static uint32_t src = 0, out = 0;
+    static uint8_t sig[32];
+    if (p == src && out && !memcmp(sig, psp_p(p), 32)) return out;
+    if (!out) out = psp_reserve(RO_ALL * 16);
+    src = p;
+    memcpy(sig, psp_p(p), 32);
+    uint8_t* o = psp_p(out);
+    memcpy(o, psp_p(p), RO_SYS * 16);
+    for (int s = RO_SYS; s < RO_ALL; s++) {
+        const roster::Char* ch = roster::find(s);
+        int from = ch && ch->donor >= 0 && ch->donor < RO_SYS ? ch->donor : 3;
+        memcpy(o + s * 16, o + from * 16, 16);
+        if (ch) printf("roster: %s: vida y ki del id %d (vida %d)\n", ch->key.c_str(), from, (int)psp_l32(out + s * 16));
+    }
+    return out;
 }
 
 // transformation targets of a fighter given by key in roster.txt: written into its loaded params (025, +0xA2)
@@ -297,23 +332,25 @@ static void ro_fighter(uint32_t cb) {
     if (!guest_ptr(x)) return;
     uint32_t s = psp_l32(x + 8), p = psp_l32(x + 0x91C);
     if (s >= (uint32_t)RO_ALL || !guest_ptr(p)) return;
-    const roster::Char* ch = roster::find((int)s);
-    if (!ch) return;
-    for (int i = 0; i < 4; i++) {
-        if (ch->tf[i] < -1) continue;
-        uint8_t v = ch->tf[i] < 0 ? 0xFF : (uint8_t)ch->tf[i];
-        if (psp_l8(p + 0xA2 + i) == v) continue;
-        psp_s8(p + 0xA2 + i, v);
+    RoRefs rf = ro_refs(s);
+    if (!rf.tf) return;
+    auto put = [&](uint32_t off, int t, const char* what, int i) {
+        if (t < -1) return;
+        uint8_t v = t < 0 ? 0xFF : (uint8_t)t;
+        if (psp_l8(p + off) == v) return;
+        psp_s8(p + off, v);
         static int logs = 0;
-        if (logs++ < 16) printf("roster: %s: transformacion %d -> %d\n", ch->key.empty() ? std::to_string(s).c_str() : ch->key.c_str(), i, (int)v);
-    }
+        if (logs++ < 24) printf("roster: %s: %s %d -> %d\n", rf.who.c_str(), what, i, (int)v);
+    };
+    for (int i = 0; i < 4; i++) put(0xA2 + i, rf.tf[i], "transformacion", i);
+    for (int i = 0; i < 3; i++) { put(0xBE + i, rf.fu[i][0], "fusion", i); put(0xC4 + 4 * i, rf.fu[i][1], "companero de fusion", i); }
 }
 
 // site kinds: the instruction already ran; its result is replaced
 enum { RO_TAB = 1, RO_IDT, RO_LIMIT, RO_WRAP_A, RO_WRAP_B, RO_PAGE, RO_SLIDER, RO_RAND, RO_RAND_OV, RO_CPU, RO_VALID, RO_SKIP,
        RO_GHOST, RO_AVAIL, RO_SYSID_T, RO_NAME_AT, RO_NAME_BT, RO_VLINE_T, RO_VBASE_T, RO_MODEL, RO_MINV, RO_VOICE, RO_VINV, RO_VSUB,
        RO_VFLAG, RO_PF_LBN, RO_PF_SEC, RO_PF_CNT, RO_PF_BUF, RO_PF_HDR, RO_GROUP_T, RO_GRID_T, RO_SFX_T, RO_ALL_LIM, RO_MODEL_LIM, RO_VS,
-       RO_COLN };
+       RO_COLN, RO_LIFE };
 struct RoSite { uint32_t pc; uint8_t kind, r1, r2; };
 static const RoSite RO_SITES[] = {
     {0x08A0660Cu, RO_TAB}, {0x08A069A8u, RO_TAB}, {0x08A08504u, RO_TAB}, {0x08A08840u, RO_TAB}, {0x08A0889Cu, RO_TAB},
@@ -350,6 +387,7 @@ static const RoSite RO_SITES[] = {
     {0x089061E8u, RO_VS}, {0x089061F0u, RO_VS}, {0x08906778u, RO_VS}, {0x08906790u, RO_VS}, {0x089068CCu, RO_VS}, {0x089068E4u, RO_VS},
     {0x0890719Cu, RO_VS}, {0x089071A8u, RO_VS},
     {0x08A06DA4u, RO_COLN}, {0x08A08A78u, RO_COLN},
+    {0x08926FDCu, RO_LIFE}, {0x08927158u, RO_LIFE}, {0x089278ACu, RO_LIFE}, {0x08927C4Cu, RO_LIFE}, {0x0893C2BCu, RO_LIFE},
 };
 
 void psp_after(uint32_t pc, Ctx& c) {
@@ -409,6 +447,7 @@ void psp_after(uint32_t pc, Ctx& c) {
         case RO_ALL_LIM: if (ro_dyn_on()) c.r[rt] = c.r[rs] < (uint32_t)RO_ALL; break;
         case RO_MODEL_LIM: if (ro_dyn_on() && ro_live(c.r[rs])) c.r[rt] = 1; break;
         case RO_VS: if (ro_dyn_on()) c.r[rt] = ro_vs(c.r[rt], psp_l32(c.r[rs] + 8)); break;
+        case RO_LIFE: if (ro_dyn_on()) c.r[rt] = ro_life(c.r[rt]); break;
         case RO_COLN:
             if (ro_dyn_on() && ro_live(c.r[2])) { int n = psp_col_count((int)c.r[2]); c.r[rt] = (uint32_t)(n > 0 ? n : 1); }
             break;

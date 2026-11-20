@@ -18,7 +18,7 @@ static bool rv_ochar_used(int s) {   // re_fchar fills re_ochar on select: only 
     for (auto& l : o.lang) if (!l.second.empty()) return true;
     return false;
 }
-static bool rv_in_mod(int s) { return re_find(s) || re_orig.count(s) || rv_ochar_used(s) || re_lab_any(s) || re_fref.count(s) || pe_count(s) > 0; }
+static bool rv_in_mod(int s) { return re_find(s) || re_orig.count(s) || rv_ochar_used(s) || re_lab_any(s) || re_fref.count(s) || re_refs.count(s) || pe_count(s) > 0; }
 static void rv_fill() {
     rv_rows.clear();
     int last = (int)re_cells.size() - 1;
@@ -215,7 +215,7 @@ static void rv_create(int H) {
         wc.lpfnWndProc = rv_head_proc; wc.lpszClassName = L"TTTCharHead"; RegisterClassW(&wc);
         reg = true;
     }
-    rv_list = CreateWindowExW(0, L"TTTCharList", L"", WS_CHILD | WS_VSCROLL | WS_TABSTOP, E(184), E(52), E(212), E(H - 68), cm, (HMENU)(INT_PTR)IDV_LIST, GetModuleHandle(nullptr), nullptr);
+    rv_list = CreateWindowExW(0, L"TTTCharList", L"", WS_CHILD | WS_VSCROLL | WS_TABSTOP, E(184), E(52), E(212), E(H - 72), cm, (HMENU)(INT_PTR)IDV_LIST, GetModuleHandle(nullptr), nullptr);
     theme_control(rv_list);
     rv_head = CreateWindowExW(0, L"TTTCharHead", L"", WS_CHILD, E(412), E(16), E(852), E(100), cm, (HMENU)(INT_PTR)IDV_HEAD, GetModuleHandle(nullptr), nullptr);
     cm_page[1].push_back(rv_list); cm_page[1].push_back(rv_head);

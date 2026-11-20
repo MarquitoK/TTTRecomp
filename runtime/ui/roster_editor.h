@@ -23,6 +23,8 @@ enum { IDR_NEW = 3200, IDR_COPY, IDR_FORM, IDR_DEL, IDR_MOD_L, IDR_MOD, IDR_RESE
        IDR_F_L, IDR_F0, IDR_F1, IDR_F2, IDR_F3, IDR_F4, IDR_F5, IDR_F6, IDR_F7, IDR_D_L, IDR_D0, IDR_D1, IDR_D2, IDR_D3, IDR_T0, IDR_T1, IDR_T2, IDR_T3, IDR_CPREV, IDR_CNAME, IDR_CNEXT, IDR_LANG0, IDR_LANG1, IDR_LANG2, IDR_LANG3, IDR_INFO, IDR_GRID, IDR_FORMS_L, IDR_FORMS, IDR_SUM,
        IDR_PG0, IDR_PG1, IDR_LT0, IDR_LT1, IDR_LT2, IDR_LN0, IDR_LB0 = IDR_LN0 + 9, IDR_LHELP = IDR_LB0 + 9, IDR_FTL, IDR_FTC, IDR_FTN0, IDR_FTN1, IDR_FT0, IDR_FT1, IDR_PCM, IDR_PG2, IDR_PINFO, IDR_PCPREV, IDR_PCNAME, IDR_PCNEXT, IDR_PUNDO, IDR_PVIEW, IDR_PS0, IDR_PS_END = IDR_PS0 + 16, IDR_LAST };   // label boxes: kind * 3 + lang (name, form right, form left; en, es)
 
+struct ReRefs { std::string tfk[4], fuk[3][2]; std::vector<roster::VsLine> vs;   // characters named by key or id (roster.txt transform, fusion_N, intro, victory)
+    bool any() const { for (auto& k : tfk) if (!k.empty()) return true; for (auto& f : fuk) if (!f[0].empty() || !f[1].empty()) return true; return !vs.empty(); } };
 struct ReChar { bool pcm = false, keyed = false; std::string raw; int sysid = -1, donor = 3; std::string id, name[3], img[4], file[14], bt3[10], dmg[10], tex1[10]; std::map<std::string, std::string> lang; };   // tex1: level 1 damage textures per colour ("on" = made on export, "mod:" = on disk)   // dmg: damaged costume per colour ("ttt:", "bt3:" or "dir:")   // file: "ttt:" pak or "dir:" folder; bt3: BT3 paks over a folder (\n)
 struct ReOrig { std::string name[3]; int newid = -1; };   // an original character: own names, own BT3 id
 struct ReItem { int sys, kind; };
@@ -62,6 +64,7 @@ static ReGrid re_main, re_forms, re_pick;
 static std::vector<std::vector<int>> re_cells, re_vanilla;
 static std::vector<ReChar> re_chars;
 static std::map<int, ReOrig> re_orig;
+static std::map<int, ReRefs> re_refs;
 static std::map<int, std::array<std::string, 2>> re_ftab;   // transformation texts (names as text): id < 100 a game row given another text, >= 100 new
 static std::map<int, int> re_fref;   // character -> transformation text id it was given (-1 none)
 int psp_form_row(int menu);
@@ -370,7 +373,7 @@ static void re_form_fill(int s) {   // the list of texts (the game's rows and th
 static bool re_has_roster() {   // something only roster.txt can say (originals' files alone travel as Packfile content)
     bool lab = false;
     for (auto& x : re_lab) lab = lab || re_lab_any(x.first);
-    return !re_chars.empty() || !re_orig.empty() || re_layout_set || lab || !re_ftab.empty() || !re_fref.empty();
+    return !re_chars.empty() || !re_orig.empty() || re_layout_set || lab || !re_ftab.empty() || !re_fref.empty() || !re_refs.empty();
 }
 static void re_drop_unused() {   // a new character without any cell is gone (the game would add it again before Random)
     for (size_t i = 0; i < re_chars.size();) {
@@ -670,6 +673,7 @@ static void re_move_id(int a, int b) {   // a character's editor data follows it
     for (auto& cell : re_cells) for (auto& x : cell) if (x == a) x = b;
     auto l = re_lab.find(a); if (l != re_lab.end()) { re_lab[b] = l->second; re_lab.erase(a); }
     auto f = re_fref.find(a); if (f != re_fref.end()) { re_fref[b] = f->second; re_fref.erase(a); }
+    auto r = re_refs.find(a); if (r != re_refs.end()) { re_refs[b] = r->second; re_refs.erase(a); }
 }
 static int re_new_char() {
     int nk = 0; for (auto& o : re_chars) nk += o.keyed;
@@ -1720,7 +1724,7 @@ static void re_command(int id, int code) {
 
 // ---------------- load (an installed mod) ----------------
 static void re_reset_all() {
-    re_chars.clear(); re_orig.clear(); re_lab.clear(); re_ftab.clear(); re_fref.clear(); re_ochar.clear(); re_gone.clear(); re_kept.clear(); re_ochar_load.clear(); re_tex1_new.clear(); re_layout_set = false; re_mod_src.clear();
+    re_chars.clear(); re_orig.clear(); re_refs.clear(); re_lab.clear(); re_ftab.clear(); re_fref.clear(); re_ochar.clear(); re_gone.clear(); re_kept.clear(); re_ochar_load.clear(); re_tex1_new.clear(); re_layout_set = false; re_mod_src.clear();
     pe_reset();
     re_packs();
     re_bitmaps_drop(-100);
@@ -1746,14 +1750,14 @@ static std::vector<std::string> re_load_mod(const std::string& root, const std::
         if (c.keyed) keys[roster::low(x.key)] = c.sysid;
         c.donor = x.donor; c.id = c.keyed ? x.key : roster::valid_id(x.id) ? x.id : "";
         for (int l = 0; l < 3; l++) c.name[l] = x.name[l];
-        {   // keys the editor does not edit yet travel unchanged
-            std::string tf;
-            for (int i = 0; i < 4; i++) tf += (i ? ", " : "") + (x.tf_key[i].empty() ? std::string("-") : x.tf_key[i]);
-            bool anytf = false; for (auto& k : x.tf_key) anytf = anytf || !k.empty();
-            if (anytf) c.raw += "transform = " + tf + "\n";
-            for (auto& v : x.vs) c.raw += std::string(v.victory ? "victory" : "intro") + " = " + v.rival + " : " + std::to_string(v.line) + "\n";
-            if (!x.folder.empty() && x.folder != "Characters/" + x.id) c.raw += "folder = " + x.folder + "\n";
+        {
+            ReRefs rf;
+            for (int i = 0; i < 4; i++) rf.tfk[i] = x.tf_key[i];
+            for (int i = 0; i < 3; i++) for (int j = 0; j < 2; j++) rf.fuk[i][j] = x.fu_key[i][j];
+            rf.vs = x.vs;
+            if (rf.any()) re_refs[c.sysid] = rf;
         }
+        if (!x.folder.empty() && x.folder != "Characters/" + x.id) c.raw += "folder = " + x.folder + "\n";
         for (const std::string& sub : {c.id, c.keyed ? std::string() : std::to_string(x.sysid)}) {
             if (sub.empty()) continue;
             std::string b = root + "/" + mod + "/Roster/" + sub + "/";
@@ -1810,6 +1814,11 @@ static std::vector<std::string> re_load_mod(const std::string& root, const std::
     }
     for (auto& x : d.renames) if (x.form >= -1) re_fref[x.sysid] = x.form;
     for (auto& r : d.renames) {
+        ReRefs rf;
+        for (int i = 0; i < 4; i++) rf.tfk[i] = r.tf_key[i];
+        for (int i = 0; i < 3; i++) for (int j = 0; j < 2; j++) rf.fuk[i][j] = r.fu_key[i][j];
+        rf.vs = r.vs;
+        if (rf.any()) re_refs[r.sysid] = rf;
         ReOrig o; for (int l = 0; l < 3; l++) o.name[l] = r.name[l]; o.newid = r.newid >= 0 && r.newid != r.sysid ? r.newid : -1;
         if (!o.name[0].empty() || !o.name[1].empty() || !o.name[2].empty() || o.newid >= 0) re_orig[r.sysid] = o;
         ReLab& lb = re_lab[r.sysid];
@@ -2016,6 +2025,18 @@ static void re_sync_gone() {
     }
 }
 static bool pe_export(const ReAdd& add, int& files, std::wstring& err);
+static std::string re_refs_keys(int s) {
+    auto it = re_refs.find(s);
+    if (it == re_refs.end()) return "";
+    const ReRefs& r = it->second;
+    std::string t;
+    bool anytf = false;
+    for (auto& k : r.tfk) anytf = anytf || !k.empty();
+    if (anytf) { t += "transform = "; for (int i = 0; i < 4; i++) t += (i ? ", " : "") + (r.tfk[i].empty() ? std::string("-") : r.tfk[i]); t += "\n"; }
+    for (int i = 0; i < 3; i++) if (!r.fuk[i][0].empty() || !r.fuk[i][1].empty()) t += "fusion_" + std::to_string(i + 1) + " = " + (r.fuk[i][0].empty() ? std::string("-") : r.fuk[i][0]) + " : " + (r.fuk[i][1].empty() ? std::string("-") : r.fuk[i][1]) + "\n";
+    for (auto& v : r.vs) t += std::string(v.victory ? "victory" : "intro") + " = " + v.rival + " : " + std::to_string(v.line) + "\n";
+    return t;
+}
 static bool re_export(const ReAdd& add, int& files, std::wstring& err) {
     if (!re_validate(err)) return false;
     re_sync_gone();
@@ -2042,12 +2063,14 @@ static bool re_export(const ReAdd& add, int& files, std::wstring& err) {
         t += "base = " + (c.file[RF_SFX].empty() || c.file[RF_VOICES].empty() ? std::to_string(c.donor < 0 ? 3 : c.donor) : std::string("none")) + "\n";
         t += re_form_keys(c.sysid);
         t += re_lab_keys(c.sysid);
+        t += re_refs_keys(c.sysid);
         t += c.raw;
     }
     std::set<int> origs;
     for (auto& r : re_orig) origs.insert(r.first);
     for (auto& x : re_lab) if (!re_find(x.first) && re_lab_any(x.first)) origs.insert(x.first);
     for (auto& x : re_fref) if (!re_find(x.first)) origs.insert(x.first);
+    for (auto& x : re_refs) if (!re_find(x.first) && x.second.any()) origs.insert(x.first);
     for (int o : origs) {
         t += "\n[original " + std::to_string(o) + "]\n";
         auto r = re_orig.find(o);
@@ -2057,6 +2080,7 @@ static bool re_export(const ReAdd& add, int& files, std::wstring& err) {
         }
         t += re_form_keys(o);
         t += re_lab_keys(o);
+        t += re_refs_keys(o);
     }
     if (re_has_roster()) {
         if (!add("Roster/roster.txt", std::vector<uint8_t>(t.begin(), t.end()))) { err = L"Failed to write the mkpak"; return false; }
