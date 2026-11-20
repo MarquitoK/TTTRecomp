@@ -2565,6 +2565,47 @@ static void bt3_shade_reg(Bt3Data* b, const std::vector<uint8_t>& model, const s
     }
 }
 
+int psp_metal_bt3(uint32_t sig, const uint8_t* d, int n);
+// BT3 metal (inside Cel BT3 / Mixed BT3): sphere and mask of every marked material, 128x128 each, handed to the GPU by model signature
+static void bt3_metal_reg(Bt3Data* b, const std::vector<uint8_t>& model, const std::string& real) {
+    const bt3::File& f = *b->f;
+    std::string dir = b->texdir[11];
+    auto tex = [&](int k, int* w, int* h, std::vector<uint32_t>& px) {
+        const uint8_t* t; uint32_t n;
+        if (f.entry(11, &t, &n) && n >= 0x20) return bt3::texture(t, n, k, w, h, px);
+        if (dir.empty()) return false;
+        char pn[16]; snprintf(pn, sizeof(pn), "/%02d.png", k + 1);
+        std::vector<uint8_t> d; std::string err;
+        if (!read_file(dir + pn, d, true) || !png_decode(d, w, h, px, &err)) return false;
+        for (auto& c : px) c = (c & 0xFFFFFFu) | (uint32_t)(((c >> 24) * 128 + 127) / 255) << 24;   // PNG alpha back to the PS2 range
+        return true;
+    };
+    std::vector<bt3::Metal> ms; float nr = 40.0f, fr = 120.0f;
+    uint32_t sig = psp_tpal_sig(model.data(), model.size());
+    if (!bt3::metal(f, tex, ms, &nr, &fr)) { psp_metal_bt3(sig, nullptr, 0); return; }
+    std::vector<uint8_t> o(16);
+    memcpy(&o[0], "MTL1", 4); memcpy(&o[4], &nr, 4); memcpy(&o[8], &fr, 4); uint32_t c = (uint32_t)ms.size(); memcpy(&o[12], &c, 4);
+    for (auto& e : ms) {
+        size_t at = o.size(); o.resize(at + 4 + 128 * 128 * 5);
+        memcpy(&o[at], &e.key, 4);
+        uint8_t* s = &o[at + 4]; uint8_t* k = s + 128 * 128 * 4;
+        for (int y = 0; y < 128; y++) for (int x = 0; x < 128; x++) {
+            uint32_t p = e.sphere[(size_t)(y * e.sh / 128) * e.sw + x * e.sw / 128];
+            s[(y * 128 + x) * 4] = (uint8_t)p; s[(y * 128 + x) * 4 + 1] = (uint8_t)(p >> 8); s[(y * 128 + x) * 4 + 2] = (uint8_t)(p >> 16); s[(y * 128 + x) * 4 + 3] = 255;
+            uint32_t q = e.mask[(size_t)(y * e.mh / 128) * e.mw + x * e.mw / 128] >> 24;
+            k[y * 128 + x] = (uint8_t)std::min<uint32_t>(255, q * 255 / 128);
+        }
+    }
+    int st = psp_metal_bt3(sig, o.data(), (int)o.size());
+    static int logs = 0;
+    if (logs < 60 && st != 1) {
+        logs++;
+        std::string nm = real; for (int k = 0, cc = 0; k < (int)nm.size(); k++) if (nm[nm.size() - 1 - k] == '/' && ++cc == 4) { nm = nm.substr(nm.size() - k); break; }
+        std::string ks; for (auto& e : ms) ks += " " + std::to_string(e.key);
+        printf("cel: metal BT3, materiales%s, distancia %.0f a %.0f, firma 0x%08X, %s\n", ks.c_str(), nr, fr, sig, nm.c_str());
+    }
+}
+
 static bool bt3_bytes(const std::string& real, int num, std::vector<uint8_t>** out) {
     Bt3Lock g;
     Bt3Data* b = bt3_data(real);
@@ -2575,7 +2616,7 @@ static bool bt3_bytes(const std::string& real, int num, std::vector<uint8_t>** o
         bt3::TexKeys tk = b->tk;
         if (!bt3::ttt_entry(*b->f, num, o, &tk)) return false;
         it = b->out.emplace(num, std::move(o)).first;
-        if (num == 2) bt3_shade_reg(b, it->second, real);
+        if (num == 2) { bt3_shade_reg(b, it->second, real); bt3_metal_reg(b, it->second, real); }
     }
     *out = &it->second;
     return true;

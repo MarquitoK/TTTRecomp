@@ -37,6 +37,7 @@
 #include "patches/split_alt.h"
 #include "patches/heap_spill.h"
 #include "patches/bone_room.h"
+#include "patches/arena_room.h"
 #include "patches/mp_menu.h"
 #include "patches/dual_full.h"
 #include "patches/net_delay.h"

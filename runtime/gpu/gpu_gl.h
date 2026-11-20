@@ -764,6 +764,7 @@ static const char* GLR_FS =
     "uniform sampler2D tex0;\n"
     "uniform sampler2D pal0;\n"
     "uniform sampler2D ramp0;\n"
+    "uniform sampler2D metal0; uniform vec4 metal_nf[16];\n"
     "uniform int usar_tex;\n"
     "uniform int tf_modo, tf_alfa, tf_dbl;\n"
     "uniform int at_on, at_fn, at_ref, at_msk;\n"
@@ -860,6 +861,11 @@ static const char* GLR_FS =
     "      if(tpr > 0.5){ vec3 rp = texture(ramp0, vec2(u, (tpr + 0.5)/256.0)).rgb; col.rgb = tpm > 2.5 ? b - rp : tpm > 1.5 ? b*rp*2.0 : b + rp; }\n"
     "      else col.rgb = mix(b, b*(0.55 + 0.4*b)*(1.0 - 0.15*step(u, 0.125)), step(u, 0.3125));\n"
     "      col.rgb += vext.rgb*(0.35 + 0.65*b);\n"
+    "      float ms = floor(tpf/4.0);\n"   // BT3 metal: sphere by the view normal, through the mask at the model UV, fading from near to far
+    "      if(ms > 0.5 && dot(vn.xyz,vn.xyz) > 0.01){ int mi = int(ms) - 1; vec3 N = normalize(vn.xyz); vec2 o = vec2(float(mi % 4)*256.0, float(mi / 4)*128.0); vec4 nq = metal_nf[mi / 2]; vec2 nf = (mi % 2) == 0 ? nq.xy : nq.zw;\n"
+    "        vec2 su = clamp(vec2(0.5 + 0.5*N.x, 0.5 - 0.5*N.y)*128.0, 0.5, 127.5), mu = clamp(fract(vuv)*128.0, 0.5, 127.5);\n"
+    "        float dk = 1.0 - clamp((length(vpo.xyz) - nf.x)/max(nf.y - nf.x, 1.0), 0.0, 1.0);\n"
+    "        col.rgb += texture(metal0, (o + su)/1024.0).rgb * texture(metal0, (o + vec2(128.0, 0.0) + mu)/1024.0).r * dk; }\n"
     "      rimk = 0.0; glowk = 0.0;\n"
     "    } else if(tpr > 0.5){\n"
     "      vec3 rp = texture(ramp0, vec2(clamp(0.5 + 0.5*nl, 0.0, 1.0), (tpr + 0.5)/256.0)).rgb;\n"
@@ -998,7 +1004,8 @@ static bool glr_vtx_plain(const VtxGL* v, size_t n) {
     return true;
 }
 static GLint glu_tex0, glu_pal0, glu_ramp0, glu_use, glu_mode, glu_alpha, glu_dbl;
-static GLuint glr_ramp = 0;
+static GLuint glr_ramp = 0, glr_metal = 0;
+static GLint glu_metal0 = -1, glu_metalnf = -1;
 static GLint glu_aton, glu_atfn, glu_atref, glu_atmsk, glu_ston, glu_stref, glu_adouble;
 static GLint glu_rtfmt, glu_cshift, glu_cmask, glu_dst0, glu_mprog, glu_verlod, glu_pmon, glu_pmrgb, glu_soft, glu_toon, glu_tedge, glu_tk, glu_tk2, glu_tk3, glu_tk4, glu_tphl, glu_tpx, glu_bolt, glu_wc, glu_ww, glu_wetk, glu_chg, glu_tpix, glu_fxlp, glu_fxlc, glu_softbl;
 
@@ -1115,6 +1122,14 @@ static bool glr_init() {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glGenTextures(1, &glr_metal);   // unit 10: BT3 metal atlas
+    glActiveTexture(GL_TEXTURE0 + 10);
+    glBindTexture(GL_TEXTURE_2D, glr_metal);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 1024, 1024, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glActiveTexture(GL_TEXTURE0);
     glUseProgram(glr_prog);
     glu_tex0 = glGetUniformLocation(glr_prog, "tex0");
@@ -1161,6 +1176,9 @@ static bool glr_init() {
     glUniform1i(glu_pal0, 1);
     glUniform1i(glu_dst0, 2);
     glUniform1i(glu_ramp0, 3);
+    glu_metal0 = glGetUniformLocation(glr_prog, "metal0");
+    glu_metalnf = glGetUniformLocation(glr_prog, "metal_nf");
+    glUniform1i(glu_metal0, 10);
     return true;
 }
 
@@ -4084,6 +4102,25 @@ static void glr_flush_queue() {
         glBindTexture(GL_TEXTURE_2D, glr_ramp);
         for (size_t r = 0; r < tpal_rows.size() && r < 255; r++) glTexSubImage2D(GL_TEXTURE_2D, 0, 0, (GLint)r + 1, 16, 1, GL_RGBA, GL_UNSIGNED_BYTE, tpal_rows[r].data());
         glActiveTexture(GL_TEXTURE0);
+    }
+    {
+        std::vector<std::pair<int, std::vector<uint8_t>>> up;
+        static float nf_sent[64] = {-1.0f};
+        float nf[64];
+        { std::lock_guard<std::mutex> g(tpal_mx); up.swap(metal_up); memcpy(nf, metal_nf, sizeof nf); }
+        if (!up.empty()) {
+            glActiveTexture(GL_TEXTURE0 + 10);
+            glBindTexture(GL_TEXTURE_2D, glr_metal);
+            std::vector<uint8_t> mk(128 * 128 * 4);
+            for (auto& u : up) {
+                int x = (u.first & 3) * 256, y = (u.first >> 2) * 128;
+                glTexSubImage2D(GL_TEXTURE_2D, 0, x, y, 128, 128, GL_RGBA, GL_UNSIGNED_BYTE, u.second.data());
+                for (int i = 0; i < 128 * 128; i++) { uint8_t v = u.second[128 * 128 * 4 + i]; mk[4 * i] = mk[4 * i + 1] = mk[4 * i + 2] = v; mk[4 * i + 3] = 255; }
+                glTexSubImage2D(GL_TEXTURE_2D, 0, x + 128, y, 128, 128, GL_RGBA, GL_UNSIGNED_BYTE, mk.data());
+            }
+            glActiveTexture(GL_TEXTURE0);
+        }
+        if (memcmp(nf_sent, nf, sizeof nf)) { GLint cur = 0; glGetIntegerv(GL_CURRENT_PROGRAM, &cur); glUseProgram(glr_prog); glUniform4fv(glu_metalnf, 16, nf); glUseProgram((GLuint)cur); memcpy(nf_sent, nf, sizeof nf); }
     }
     size_t last3d = 0; for (size_t i = 0; i < queue.size(); i++) if (queue[i].d3 && (!queue[i].cls || queue[i].cls == 2)) last3d = i + 1;   // the screen effects wait for the last 3D job of this batch
     size_t cdk_at = (size_t)-1;   // charge darkness: the first scene job of a batch without depth-writing scene jobs after this frame's scenery batch (the effects)

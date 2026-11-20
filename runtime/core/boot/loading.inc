@@ -8,14 +8,17 @@ static bool load_turbo() {
     if (v < 0) { const char* e = getenv("TTT_LOAD_TURBO"); v = e ? atoi(e) : 1; }
     return v && cg.active && cg.n >= 8 && clock_s() - cg.ult < 0.15;
 }
-// TTT_READS=text: prints every PACKFILE read whose path contains that text
-static void read_trace(uint32_t bytes) {
+// TTT_READS=text: prints every PACKFILE read whose path contains that text, with its destination and the malloc chunk there (newlib: size at dst - 4)
+static void read_trace(uint32_t bytes, uint32_t dst) {
     static const char* f = getenv("TTT_READS");
     if (!f || !*f || disc_read_entry < 0 || disc_read_entry >= (int)disc_pk.size()) return;
-    if (strstr(disc_pk[disc_read_entry].fpath.c_str(), f)) printf("read: %s, %u bytes, cuadro %ld\n", disc_pk[disc_read_entry].fpath.c_str(), bytes, cuadros);
+    if (!strstr(disc_pk[disc_read_entry].fpath.c_str(), f)) return;
+    uint32_t a = dst & psp_mem_mask, ch = a >= 0x08800004u && a < 0x0A000000u ? psp_l32(a - 4) : 0, cs = ch & ~7u;
+    printf("read: %s, %u bytes, cuadro %ld, destino 0x%08X, bloque 0x%08X (%u bytes utiles)%s\n", disc_pk[disc_read_entry].fpath.c_str(), bytes, cuadros, dst, ch,
+           cs >= 8 ? cs - 4 : 0, cs >= 8 && cs < 0x4000000u && bytes > cs - 4 ? " DESBORDA" : "");
 }
-static void load_read(double t_start, uint32_t bytes) {
-    read_trace(bytes);
+static void load_read(double t_start, uint32_t bytes, uint32_t dst) {
+    read_trace(bytes, dst);
     if (disc_read_at3 || !bytes) return;
     double t = clock_s();
     if (t - t_start > 0.02) printf("load: lectura lenta de %s, %u bytes, %.0f ms\n", disc_read_entry >= 0 ? disc_pk[disc_read_entry].fpath.c_str() : "?", bytes, (t - t_start) * 1000.0);
@@ -82,7 +85,7 @@ static uint32_t io_read(int fd, uint32_t dst, uint32_t n) {
         uint8_t* d = psp_p(dst);
         double t_start = clock_s();
         disc_read((uint64_t)x.base + x.pos, d, bytes);
-        load_read(t_start, bytes);
+        load_read(t_start, bytes, dst);
         disc_verify((uint64_t)x.base + x.pos, d, bytes);
         if (io_traces < 8) { printf("  read fd %d pos 0x%llX %u %s -> %u bytes a 0x%08X (virtual)\n", fd, x.pos, n, x.sectors ? "sectores" : "bytes", bytes, dst); io_traces++; }
         x.pos += bytes;

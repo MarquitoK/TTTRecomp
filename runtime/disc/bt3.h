@@ -15,7 +15,7 @@
 
 namespace bt3 {
 
-static const uint32_t VERSION = 14;
+static const uint32_t VERSION = 15;
 static const uint32_t VTYPE = 3u | 3u << 5 | 3u << 7 | 3u << 9 | 1u << 14;   // float uv, normal, position, 2 float weights
 
 static inline uint32_t u32(const uint8_t* p) { uint32_t v; memcpy(&v, p, 4); return v; }
@@ -705,6 +705,33 @@ template <class F, class G> static bool shade_tpal(const File& f, const TexKeys&
     o.insert(o.end(), e.begin(), e.end());
     return true;
 }
+
+// metal pass (BT3 VU1 program 1): pmdl +0x0C bit 0 and block +0x0C bit 0, groups whose first vertex has +0x1C set; sphere image +0x4D
+// by the view normal, added through the alpha of the mask image (+0x52 first, +0x53 count) that shares tbpOfs/cbpOfs with the marked one
+struct Metal { int key; std::vector<uint32_t> sphere, mask; int sw, sh, mw, mh; };
+template <class T> static bool metal(const File& f, T tex, std::vector<Metal>& out, float* nr, float* fr) {
+    out.clear();
+    const uint8_t *m, *t; uint32_t n, tn;
+    if (!f.entry(2, &m, &n) || n < 0x70 || !(u32(m + 0x0C) & 1)) return false;
+    float a, b; memcpy(&a, m + 0x10, 4); memcpy(&b, m + 0x14, 4);
+    *nr = a > 0.0f ? a : 40.0f; *fr = b > *nr ? b : *nr + 80.0f;
+    std::set<int> on, off;
+    for (auto& bk : blocks(m, n)) { bool fl = u16(m + bk.at + 12) & 1; for (auto& g : bk.g) ((fl && g.nv && u32(g.v + 0x1C)) ? on : off).insert(g.mat); }
+    bool ct = f.entry(11, &t, &tn) && tn >= 0x20 && u32(t + 4) == 8;
+    auto ofs = [&](int k, int32_t* p) { if (!ct || k < 0 || (uint32_t)k >= u32(t) || 32u + 64u * (k + 1) > tn) return false; memcpy(p, t + 32 + 64 * k + 0x20, 8); return true; };
+    int sp = m[0x4D], first = m[0x52], cnt = m[0x53];
+    Metal s0{};
+    if (!tex(sp, &s0.sw, &s0.sh, s0.sphere)) return false;
+    for (int k : on) {
+        if (off.count(k) || k >= KEY_FACE) continue;
+        int mk = -1; int32_t a2[2], b2[2];
+        if (ofs(k, a2)) for (int j = first; j < first + cnt && mk < 0; j++) if (ofs(j, b2) && a2[0] == b2[0] && a2[1] == b2[1]) mk = j;
+        Metal e = s0; e.key = k;
+        if (mk < 0 || !tex(mk, &e.mw, &e.mh, e.mask)) continue;
+        out.push_back(std::move(e));
+    }
+    return !out.empty();
+}
 static int shade_first(const File& f) { const uint8_t* m; uint32_t n; return f.entry(2, &m, &n) && n > 0x52 ? m[0x50] : -1; }
 
 // CTEX entry k as indices (rows top-down, as the texture is shown) + its palette with the BT3 alpha (0..128, same scale as TTT effects)
@@ -1058,8 +1085,8 @@ static void atex_swizzle(const std::vector<uint8_t>& lin, uint32_t step, uint32_
             for (uint32_t r = 0; r < 8; r++, k += 16) memcpy(&o[k], &lin[(size_t)(by + r) * step + bx * 16], 16);
 }
 // .dbt (CTEX) -> .atex as TTT writes it (open_paks.construir_atex), the BT3 size and palette kept
-// clut8: every image as CLUT8 (models: the game draws them only as T8); only: first N images
-static bool ctex_to_atex(const uint8_t* t, uint32_t n, std::vector<uint8_t>& o, bool clut8 = false, uint32_t only = 0) {
+// clut8: every image as CLUT8 (models: the game draws them only as T8); only: first N images; up: smaller images repeated to up x up
+static bool ctex_to_atex(const uint8_t* t, uint32_t n, std::vector<uint8_t>& o, bool clut8 = false, uint32_t only = 0, int up = 0) {
     uint32_t c = u32(t);
     if (only && only < c) c = only;
     o.assign(0x20 + 0x60 * c, 0);
@@ -1069,6 +1096,11 @@ static bool ctex_to_atex(const uint8_t* t, uint32_t n, std::vector<uint8_t>& o, 
         int w, h, bpp; std::vector<uint8_t> idx, pal, lin, sw;
         if (!ctex_indexed(t, n, (int)k, &w, &h, &bpp, idx, pal)) return false;
         if (clut8 && bpp == 4) { bpp = 8; pal.resize(1024, 0); }
+        if (up && bpp == 8 && w <= up && h <= up && (w < up || h < up)) {
+            std::vector<uint8_t> big((size_t)up * up);
+            for (int y = 0; y < up; y++) for (int x = 0; x < up; x++) big[(size_t)y * up + x] = idx[(size_t)(y * h / up) * w + x * w / up];
+            idx.swap(big); w = h = up;
+        }
         if (bpp == 4) { lin.resize((size_t)w * h / 2); for (size_t i = 0; i < lin.size(); i++) lin[i] = (uint8_t)((idx[2 * i] & 15) | (idx[2 * i + 1] & 15) << 4); }
         else lin = idx;
         atex_swizzle(lin, bpp == 4 ? w / 2 : w, h, sw);
@@ -1110,7 +1142,7 @@ static bool vfx_pak(const uint8_t* d, uint32_t n, std::vector<uint8_t>& o, EffSt
                 }
                 if (me.size() > 11 && is_ctex(me[11].first, me[11].second)) {
                     uint32_t used = tk.keys.empty() ? 0 : (uint32_t)tk.keys.rbegin()->first + 1;   // the textures the model uses (TTT: one CLUT8)
-                    if (ctex_to_atex(me[11].first, me[11].second, ao, true, used)) { mp[11] = std::move(ao); st.tex++; }
+                    if (ctex_to_atex(me[11].first, me[11].second, ao, true, used, 256)) { mp[11] = std::move(ao); st.tex++; }   // the game draws VFX model textures as 256x256
                     else st.bad++;
                 }
                 be_pak(mp, parts[i]);

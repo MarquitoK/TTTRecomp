@@ -1229,6 +1229,51 @@ int psp_tpal_bt3(uint32_t sig, const uint8_t* d, int n) {   // 0 new, 1 same, 2 
     tpal_bt3.push_back({sig, std::vector<uint8_t>(d, d + n)});
     return 0;
 }
+// BT3 metal (Cel BT3 / Mixed BT3): per marked material a sphere and a mask, 32 atlas slots of 256x128 (sphere | mask), near/far per slot
+static std::vector<std::pair<uint32_t, std::vector<uint8_t>>> metal_bt3;
+static std::map<uint64_t, int> metal_slot_of;
+static std::vector<std::pair<int, std::vector<uint8_t>>> metal_up;
+static uint64_t metal_owner[32];
+static float metal_nf[64];
+static int metal_next = 0;
+static void metal_forget(uint32_t sig) { for (auto s = metal_slot_of.begin(); s != metal_slot_of.end();) if ((uint32_t)(s->first >> 32) == sig) s = metal_slot_of.erase(s); else ++s; }
+int psp_metal_bt3(uint32_t sig, const uint8_t* d, int n) {   // 0 new, 1 same, 2 replaced, 3 removed, 4 none
+    std::lock_guard<std::mutex> g(tpal_mx);
+    bool ok = d && n >= 16 && !memcmp(d, "MTL1", 4);
+    metal_forget(sig);
+    for (auto it = metal_bt3.begin(); it != metal_bt3.end(); ++it) if (it->first == sig) {
+        if (ok && it->second.size() == (size_t)n && !memcmp(it->second.data(), d, n)) return 1;
+        if (!ok) { metal_bt3.erase(it); return 3; }
+        it->second.assign(d, d + n);
+        return 2;
+    }
+    if (!ok) return 4;
+    metal_bt3.push_back({sig, std::vector<uint8_t>(d, d + n)});
+    return 0;
+}
+static int metal_slot(uint32_t sig, int key) {
+    std::lock_guard<std::mutex> g(tpal_mx);
+    uint64_t id = (uint64_t)sig << 32 | (uint32_t)key;
+    auto f = metal_slot_of.find(id);
+    if (f != metal_slot_of.end()) return f->second;
+    int slot = -1;
+    for (auto& m : metal_bt3) {
+        if (m.first != sig) continue;
+        const std::vector<uint8_t>& d = m.second;
+        uint32_t c; memcpy(&c, &d[12], 4);
+        for (uint32_t i = 0, at = 16; i < c && at + 4 + 128 * 128 * 5 <= d.size(); i++, at += 4 + 128 * 128 * 5) {
+            int k; memcpy(&k, &d[at], 4);
+            if (k != key) continue;
+            slot = metal_next++ & 31;
+            if (metal_owner[slot]) metal_slot_of.erase(metal_owner[slot]);
+            metal_owner[slot] = id;
+            memcpy(&metal_nf[2 * slot], &d[4], 8);
+            metal_up.push_back({slot, std::vector<uint8_t>(d.begin() + at + 4, d.begin() + at + 4 + 128 * 128 * 5)});
+        }
+    }
+    metal_slot_of[id] = slot;
+    return slot;
+}
 static int toon_mode();
 uint32_t psp_tpal_sig(const uint8_t* m, size_t n) {   // pMdl: part count and per part material and geometry size (relocation does not touch them)
     auto u32 = [&](size_t o) { uint32_t v = 0; if (o + 4 <= n) memcpy(&v, m + o, 4); return v; };
@@ -4976,6 +5021,7 @@ static void primitive_one(uint32_t arg) {
         toon_grp = part >= 0 ? (toon_epoch << 8) | (uint32_t)(part + 1) : 0;
         toon_face = part >= 0 && flag == 6;
         toon_tp = part >= 0 ? toon_tpal(toon_last_hdr, mat) : 0;
+        if (part >= 0 && mat >= 0 && toon_mode() == 2) for (auto& t : tpal_sets) if (t.hdr == toon_last_hdr) { int s = metal_slot(t.sig, mat); if (s >= 0) toon_tp = (toon_tp & ~0xFC00u) | (uint32_t)(s + 1) << 10; break; }   // flags bits 2..7: metal slot + 1
         static int logs = 0;
         static int last_src = -1; static float last_s[3];
         if (sun_src != last_src || std::fabs(sx - last_s[0]) + std::fabs(sy - last_s[1]) + std::fabs(sz - last_s[2]) > 0.01f) { last_src = sun_src; last_s[0] = sx; last_s[1] = sy; last_s[2] = sz; static int tot = 0; if (logs >= 1 && tot < 10) { logs = 0; tot++; } }

@@ -43,6 +43,26 @@ static void hs_release(uint32_t p) {
     if (pv != hs_free.begin()) { --pv; if (pv->first + pv->second == b) { b = pv->first; n += pv->second; hs_free.erase(pv); } }
     hs_free[b] = n;
 }
+// arena_room: arena record at [0x08A7D4D0] + 16 * id = {base, next, size, used}; 0x088FE410 never checks used against size.
+// Seen: Pilaf Machine (BT3) ultimate, a later node pool landed on the class 6 pool and broke its owner link (no model, endless destroy)
+static std::vector<uint32_t> ar_spill[16];
+static void ar_drop(int id) { for (uint32_t p : ar_spill[id]) hs_release(p); ar_spill[id].clear(); }
+static bool ar_wrap(uint32_t dir, Ctx& c, void (*orig)(Ctx&)) {
+    uint32_t S = psp_l32(0x08A7D4D0u), id = c.r[4];
+    if (dir == 0x088FE3BCu) { for (int k = 0; k < 16; k++) ar_drop(k); return false; }
+    if (!S || id > 12 || !(psp_l32(S + 0xD8) >> (id + 1) & 1)) return false;
+    uint32_t a = S + 16 * id;
+    if (dir == 0x088FE4E8u) { ar_drop((int)id); return false; }
+    uint32_t size = (c.r[5] + 0x1Fu) & ~0x1Fu, used = psp_l32(a + 0xC), cap = psp_l32(a + 8);
+    if (!patch_arena_room.val || used + size <= cap) return false;
+    uint32_t r = hs_alloc(size, 64);
+    if (!r) return false;
+    ar_spill[id].push_back(r);
+    c.r[2] = r;
+    static int logs = 0;
+    if (logs++ < 12) { printf("memoria: arena %u llena (%u de %u bytes), %u bytes van a la reserva 0x%08X (desde 0x%08X)\n", id, used, cap, size, r, c.r[31] - 8); fflush(stdout); }
+    return true;
+}
 bool psp_heap_arena(uint32_t* a, uint32_t* e);
 // TTT_FREE_GUARD: a free of a newlib chunk that is already free (or has a broken header) is refused; a double free loops newlib for ever
 static bool fg_bad(uint32_t p, const Ctx& c) {
@@ -1623,6 +1643,60 @@ static bool box_wrap(uint32_t dir, Ctx& c, void (*orig)(Ctx&)) {
     return true;
 }
 
+// TTT_OBJ_LOG=1: object create / destroy with the pak handed in (model 002, textures 011) and the caller
+static bool obj_log_on() { static int v = -1; if (v < 0) { const char* e = getenv("TTT_OBJ_LOG"); v = e && *e == '1'; } return v == 1; }
+static uint32_t obj_be32(uint32_t a) { uint32_t v = psp_l32(a); return v >> 24 | (v >> 8 & 0xFF00u) | (v << 8 & 0xFF0000u) | v << 24; }
+static void obj_pak(char* m, size_t n, uint32_t pak) {   // a model pak as the object loader reads it (entries 3 and 0xC, 1-based)
+    uint32_t cnt = obj_be32(pak), o3 = obj_be32(pak + 12), z3 = obj_be32(pak + 16) - o3, oc = obj_be32(pak + 48), zc = obj_be32(pak + 52) - oc;
+    uint32_t e3 = pak + o3, ec = pak + oc, w = psp_l32(ec + 0x48);
+    snprintf(m, n, "pak 0x%08X: %u entradas, 002 desp %u tam %u firma %02X%02X%02X%02X huesos %u, 011 desp %u tam %u texturas %u tex0 %ux%u formato %u",
+             pak, cnt, o3, z3, psp_l8(e3), psp_l8(e3 + 1), psp_l8(e3 + 2), psp_l8(e3 + 3), psp_l32(e3 + 8), oc, zc, psp_l32(ec), 1u << (w >> 8 & 15), 1u << (w & 15), w >> 24);
+}
+static void obj_log(uint32_t dir, Ctx& c, void (*orig)(Ctx&)) {
+    static int logs = 0;
+    static std::map<uint64_t, int> rep;
+    uint32_t a0 = c.r[4], rec = c.r[5], ra = c.r[31], up = psp_l32(c.r[29] + (ra == 0x088FF92Cu ? 8u : 0u));
+    uint32_t base = psp_l32(0x08A7E278u);
+    char m[320] = "";
+    if (dir == 0x088A0584u) {   // class 6 owner init: a0 owner task (data +0x38), a1 params (+0x20 skill pak)
+        uint32_t ow = psp_l32(a0 + 0x38), sk = psp_l32(rec + 0x20);
+        printf("obj: clase 6 inicio: pak de tecnica 0x%08X, %u entradas, 00 desp %u tam %u, 03 desp %u tam %u\n", sk, obj_be32(sk), obj_be32(sk + 4), obj_be32(sk + 8) - obj_be32(sk + 4),
+               obj_be32(sk + 16), obj_be32(sk + 20) - obj_be32(sk + 16));
+        orig(c);
+        uint32_t pk = psp_l32(ow + 0x324);
+        obj_pak(m, sizeof m, pk);
+        printf("obj: clase 6 tras cargar: dueno 0x%08X, +0x324 = 0x%08X (esperado 0x%08X); %s\n", ow, pk, sk + (obj_be32(sk + 4) & ~3u), m);
+        fflush(stdout);
+        if (psp_watch_nodes) psp_watch_node(0x088A0634u, a0);   // arm the write watch before anything else runs
+        return;
+    }
+    if (dir == 0x089AE1FCu) {
+        uint32_t obj = base + 0x16E0u * a0 + 0x10u;
+        int live = (int)psp_l32(obj + 0xC), n = ++rep[(uint64_t)a0 << 32 | up];
+        orig(c);
+        if (n <= 3 || n == 1000) { printf("obj: destruir id %d (ra 0x%08X, desde 0x%08X, vez %d), objeto con id %d\n", (int)a0, ra, up, n, live); fflush(stdout); }
+        return;
+    }
+    uint32_t pak = psp_l32(rec);
+    if (a0 == 1 && pak) obj_pak(m, sizeof m, pak);
+    if (up == 0x0889F8F8u) {   // class 6 model setup: node task in s3; owner = [[node + 0x20]] as 0x0889F728 reads it
+        uint32_t node = c.r[19], P = psp_l32(node + 0x20), T = psp_l32(P), dat = psp_l32(T + 0x38), cls = psp_l32(T + 0x28);
+        printf("obj: clase 6 modelo: nodo 0x%08X (clase 0x%08X), +0x20 = 0x%08X, tarea duena 0x%08X (clase 0x%08X, update 0x%08X), datos 0x%08X, +0x324 = 0x%08X, s1 en pila 0x%08X\n",
+               node, psp_l32(psp_l32(node + 0x28)), P, T, cls, psp_l32(cls), dat, psp_l32(dat + 0x324), psp_l32(c.r[29] + 4));
+        printf("obj:   datos del dueno:");
+        for (uint32_t k = 0; k < 8; k++) printf(" %08X", psp_l32(dat + 4 * k));
+        printf(" ... +0x310:");
+        for (uint32_t k = 0; k < 8; k++) printf(" %08X", psp_l32(dat + 0x310 + 4 * k));
+        printf("\n");
+    }
+    orig(c);
+    if (logs++ >= 60) return;
+    int id = (int)c.r[2];
+    uint32_t obj = id >= 0 ? base + 0x16E0u * (uint32_t)id + 0x10u : 0, pm = obj ? psp_l32(obj + 0x14) : 0;
+    printf("obj: crear tipo %u -> id %d (ra 0x%08X, desde 0x%08X), registro 0x%08X; %s; pMdl del objeto 0x%08X\n", a0, id, ra, up, rec, m, pm);
+    fflush(stdout);
+}
+
 void psp_wrap(uint32_t dir, Ctx& c, void (*orig)(Ctx&)) {
     if (hw_on() != 2) { psp_wrap_body(dir, c, orig); return; }
     uint32_t ra = c.r[31], a0 = c.r[4];
@@ -1654,6 +1728,8 @@ static void psp_wrap_body(uint32_t dir, Ctx& c, void (*orig)(Ctx&)) {
     }
     if (dir == 0x08A82B1Cu) { boot_credits(c, orig); return; }
     if ((dir == 0x089BFD60u || dir == 0x089BFDB0u) && hs_wrap(dir, c, orig)) return;
+    if ((dir == 0x088FE410u || dir == 0x088FE4E8u || dir == 0x088FE3BCu) && ar_wrap(dir, c, orig)) return;
+    if ((dir == 0x089AE0A4u || dir == 0x089AE1FCu || dir == 0x088A0584u) && obj_log_on()) { obj_log(dir, c, orig); return; }
     if (dir == 0x0880E0C8u) { orig(c); if (patch_bone_room.val && c.r[2] == 0x7700u) c.r[2] = 0xBC00u; return; }   // table 1 at +0x3BC0 fits bone ids up to 255
     AwScope aw_scope(dir);
     if (au_wrap(dir, c, orig)) return;

@@ -35,6 +35,8 @@
 0x089A6F28                        # stage collision BVH descent: depth guard (a cycle in the map data overflowed the stack)
 0x089DC2A0                        # HUD clash prompt
 0x0880E0C8                        # bone-matrix block size of objects (bone_room)
+0x089AE0A4 0x089AE1FC 0x088A0584  # object create / destroy, class 6 owner init (TTT_OBJ_LOG diagnostic)
+0x088FE410 0x088FE4E8 0x088FE3BC  # battle arena alloc / reset / teardown (arena_room)
 0x088B4EF0 0x08902B40             # render slot table
 0x089477B4 0x08916904             # float, camera bob in the air
 0x088C9EF8                        # ki blast carrier: life countdown
