@@ -517,7 +517,7 @@ static void cm_select_tab(int k) {
         if (y + h > mi.rcWork.bottom) y = std::max((int)mi.rcWork.top, (int)mi.rcWork.bottom - h);
     }
     SetWindowPos(cm, nullptr, x, y, w, h, SWP_NOZORDER | SWP_NOACTIVATE);
-    cm_place(IDC_NOTICE, CM_RAIL + 16, H - 40, W - CM_RAIL - 32, 28);
+    cm_place(IDC_NOTICE, CM_RAIL + 16, H - 40, k == 1 ? 684 : W - CM_RAIL - 32, 28);
     cm_place(IDC_SAVE, 12, H - 130, 144, 32);
     cm_place(IDC_CREATE, 12, H - 92, 144, 32);
     cm_place(IDC_CLOSE, 12, H - 54, 144, 32);
@@ -561,6 +561,41 @@ static void cm_command(int id) {
         case IDC_SAVE: if (re_mod_src.empty()) cm_create(true, true); else cm_create(false); break;
         case IDC_CLOSE: cm_close(); break;
     }
+}
+
+// Select screen right column: header (render, name, kind) and the General rows laid out by re_general_layout
+static void cm_paint_general(HDC dc, int s, bool nw, bool orig) {
+    SetBkMode(dc, TRANSPARENT);
+    if (s >= -1) {
+        rv_thumb(dc, s, E(884), E(56), E(64), E(36));
+        RECT t = {E(960), E(54), E(1264), E(76)}, u = {E(960), E(74), E(1264), E(94)};
+        rv_text(dc, mw_w(re_label(s)), t, THEME_TEXT, theme_f_bold);
+        rv_text(dc, s == -1 ? L"Random, always the last cell" : nw ? L"New character" : L"Game character", u, THEME_TEXT2, theme_f_normal);
+    } else {
+        RECT t = {E(884), E(56), E(1264), E(92)};
+        rv_text(dc, L"Select a cell", t, THEME_TEXT2, theme_f_normal);
+    }
+    HPEN line = CreatePen(PS_SOLID, 1, THEME_BORDER), sep = CreatePen(PS_SOLID, 1, RGB(42, 48, 59));
+    HGDIOBJ op = SelectObject(dc, line);
+    MoveToEx(dc, E(884), E(140), nullptr); LineTo(dc, E(1264), E(140));
+    SelectObject(dc, sep);
+    if (re_page == 0 && (nw || orig)) for (auto& r : re_grows) {
+        if (r.cap) { RECT c = {E(884), E(r.y + 8), E(1264), E(r.y + r.h)}; rv_text(dc, r.label, c, THEME_TEXT2, theme_f_normal); continue; }
+        if (!r.label.empty()) { RECT c = {E(884), E(r.y), E(1060), E(r.y + r.h)}; rv_text(dc, r.label, c, THEME_TEXT, theme_f_normal); }
+        MoveToEx(dc, E(884), E(r.y + r.h) - 1, nullptr); LineTo(dc, E(1264), E(r.y + r.h) - 1);
+        if (r.frame >= 0) theme_frame_e(dc, 1064, r.y + 1, 200, 30);
+        auto it = re_st.find(r.btn);
+        if (r.btn < 0 || it == re_st.end()) continue;
+        int st = it->second;
+        static const COLORREF BG[4] = {RGB(42, 48, 59), RGB(29, 53, 80), RGB(58, 43, 85), RGB(74, 50, 21)}, FG[4] = {THEME_TEXT2, RGB(156, 198, 240), RGB(205, 184, 242), RGB(255, 207, 143)};
+        std::wstring t = st == 0 ? L"None" : st == 1 ? L"Game" : st == 2 ? L"This mod" : r.btn == IDR_T0 ? L"On" : nw ? L"Added" : L"Replaced";
+        HGDIOBJ of = SelectObject(dc, theme_f_normal); SIZE sz; GetTextExtentPoint32W(dc, t.c_str(), (int)t.size(), &sz); SelectObject(dc, of);
+        int w = sz.cx + E(16), x = E(1180) - w, y = E(r.y + 6);
+        rv_round(dc, x, y, w, E(20), E(10), BG[st]);
+        RECT c = {x, y, x + w, y + E(20)};
+        rv_text(dc, t, c, FG[st], theme_f_normal, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+    }
+    SelectObject(dc, op); DeleteObject(line); DeleteObject(sep);
 }
 
 static LRESULT CALLBACK cm_proc(HWND h, UINT m, WPARAM w, LPARAM l) {
@@ -607,11 +642,7 @@ static LRESULT CALLBACK cm_proc(HWND h, UINT m, WPARAM w, LPARAM l) {
             bool nw = s >= 0 && re_find(s), orig = s >= 0 && !nw;
             theme_frame_e(dc, 183, 63, 522, 594);
             theme_frame_e(dc, 719, 85, 150, 572);
-            if (nw && re_page == 0) theme_frame_e(dc, RE_DX + 100, RE_DY + 193, 216, 30);
-            if ((nw || orig) && re_page == 0) for (int l = 0; l < 2; l++) theme_frame_e(dc, RE_DX + 100, RE_DY + 291 + 30 * l, 216, 30);
-            HPEN p = CreatePen(PS_SOLID, 1, THEME_BORDER); HGDIOBJ op = SelectObject(dc, p);
-            MoveToEx(dc, E(884), E(134), nullptr); LineTo(dc, E(1264), E(134));
-            SelectObject(dc, op); DeleteObject(p);
+            cm_paint_general(dc, s, nw, orig);
         }
         EndPaint(h, &ps);
         return 0;
@@ -685,8 +716,8 @@ static void cm_open() {
         cm_ctl(L"BUTTON", L"+ New character", BS_OWNERDRAW | WS_TABSTOP, 184, 16, 140, 30, IDR_NEW);
         cm_ctl(L"BUTTON", L"Copy", BS_OWNERDRAW | WS_TABSTOP, 330, 16, 96, 30, IDR_COPY);
         cm_ctl(L"BUTTON", L"Transformation", BS_OWNERDRAW | WS_TABSTOP, 432, 16, 130, 30, IDR_FORM);
-        cm_ctl(L"BUTTON", L"General", BS_OWNERDRAW | WS_TABSTOP, 884, 96, 96, 34, IDR_PG0);
-        cm_ctl(L"BUTTON", L"Labels", BS_OWNERDRAW | WS_TABSTOP, 984, 96, 88, 34, IDR_PG1);
+        cm_ctl(L"BUTTON", L"General", BS_OWNERDRAW | WS_TABSTOP, 884, 104, 96, 32, IDR_PG0);
+        cm_ctl(L"BUTTON", L"Labels", BS_OWNERDRAW | WS_TABSTOP, 984, 104, 88, 32, IDR_PG1);
         // Characters page: list, header with the forms, tabs
         cm_ctl(L"EDIT", L"", ES_AUTOHSCROLL | WS_TABSTOP | WS_BORDER, 184, 16, 212, 28, IDV_SEARCH);
         SendMessageW(GetDlgItem(cm, IDV_SEARCH), EM_SETCUEBANNER, TRUE, (LPARAM)L"Search");
@@ -721,7 +752,7 @@ static void cm_open() {
         cm_ctl(L"STATIC", L"Color 1", SS_CENTER | SS_CENTERIMAGE, 44, 480, 84, 26, IDR_CNAME, theme_f_bold);
         cm_ctl(L"BUTTON", L">", BS_OWNERDRAW | WS_TABSTOP, 128, 480, 28, 26, IDR_CNEXT);
         cm_ctl(L"BUTTON", L"Color files", BS_OWNERDRAW | WS_TABSTOP, 162, 480, 152, 26, IDR_F0);
-        cm_ctl(L"BUTTON", L"Pre CMAN", BS_OWNERDRAW | WS_TABSTOP, 16, 564, 146, 26, IDR_PCM);
+        cm_ctl(L"BUTTON", L"Create", BS_OWNERDRAW | WS_TABSTOP, 16, 564, 76, 26, IDR_PCM);
         cm_ctl(L"STATIC", L"", 0, 16, 507, 1, 1, IDR_D_L);
         cm_ctl(L"BUTTON", L"Damaged (model)", BS_OWNERDRAW | WS_TABSTOP, 16, 507, 146, 26, IDR_D0);
         cm_ctl(L"BUTTON", L"Damaged (textures)", BS_OWNERDRAW | WS_TABSTOP, 168, 507, 146, 26, IDR_T0);
@@ -750,7 +781,7 @@ static void cm_open() {
         cm_dx = cm_dy = 0;
         re_grid_create(re_main, cm, 184, 64, 520, 592, IDR_GRID);
         cm_page[1].push_back(re_main.h);
-        cm_ctl(L"STATIC", L"", SS_ENDELLIPSIS, 884, 64, 380, 22, IDR_SUM);
+        cm_ctl(L"STATIC", L"", SS_ENDELLIPSIS, 184, 662, 520, 18, IDR_SUM);
         cm_ctl(L"STATIC", L"Transformations", SS_ENDELLIPSIS, 720, 64, 148, 18, IDR_FORMS_L);
         re_forms = ReGrid(); re_forms.cols = 1; re_forms.mode = 1;
         re_grid_create(re_forms, cm, 720, 86, 148, 570, IDR_FORMS);

@@ -95,8 +95,12 @@ static std::string re_mod_src, re_mod_root;
 static void pe_panel(int s);
 static void pe_side_cmd(int id);
 static int re_view = 0;   // 0 Characters page, 1 Select screen page
-static const int RE_DX = 868, RE_DY = -12;   // General and Labels: right column of the Select screen page
+static const int RE_DX = 868, RE_DY = -18;   // General and Labels: right column of the Select screen page
 static void re_view_apply();
+struct ReRow { int y, h; std::wstring label; int btn = -1, frame = -1; bool cap = false; };
+static std::vector<ReRow> re_grows;   // General page rows (painted by the creator: labels, lines, file states)
+static std::map<int, int> re_st;   // file buttons: 0 none, 1 game, 2 this mod, 3 set now
+static void re_general_layout(int s, bool nw, bool orig, bool base, bool chg);
 static void pe_reset();
 static bool pe_any();
 static HWND re_pick_w = nullptr;
@@ -746,8 +750,19 @@ static bool re_is_mod(const std::string& v) {
     std::string r = re_norm(re_mod_root + "/" + re_mod_src) + "/", p = re_norm(v.substr(4, v.find('\n') == std::string::npos ? std::string::npos : v.find('\n') - 4));
     return !p.compare(0, r.size(), r);
 }
+static bool re_row_btn(int id) { return id == IDR_F0 || (id >= IDR_F4 && id <= IDR_F7) || id == IDR_D0 || id == IDR_T0 || (id >= IDR_LANG0 && id <= IDR_LANG3); }
 static void re_mark(int id, bool on, bool exists = false, bool modded = false) {
     HWND c = GetDlgItem(cm, id);
+    if (re_row_btn(id)) {
+        int st = on ? (modded ? 2 : 3) : exists ? 1 : 0;
+        re_st[id] = st;
+        theme_primary.erase(c); theme_modded.erase(c); theme_exists.erase(c);
+        const wchar_t* t = id == IDR_T0 ? (st ? L"Remove" : L"Make") : st ? L"Replace" : L"Add";
+        wchar_t cur[32] = L""; GetWindowTextW(c, cur, 32);
+        if (wcscmp(cur, t)) SetWindowTextW(c, t);
+        InvalidateRect(c, nullptr, TRUE);
+        return;
+    }
     if (on) theme_primary.insert(c); else theme_primary.erase(c);
     if (on && modded) theme_modded.insert(c); else theme_modded.erase(c);
     if (exists && !on) theme_exists.insert(c); else theme_exists.erase(c);
@@ -800,10 +815,7 @@ static void re_panel() {
     re_lang_panel(s, nw || orig);
     {   // charge row after the voices: below the voice pack buttons when they are shown
         bool chg = (nw || orig) && re_chg_on();
-        int y = re_lang_shown ? 588 : 561, last = chg ? y : re_lang_shown ? 561 : 534;
-        for (int k = 0; k < 2; k++) { re_show(IDR_F6 + k, chg); SetWindowPos(GetDlgItem(cm, IDR_F6 + k), nullptr, E(RE_DX + 16 + 152 * k), E(RE_DY + y), E(146), E(26), SWP_NOZORDER | SWP_NOACTIVATE); }
-        SetWindowPos(GetDlgItem(cm, IDR_PCM), nullptr, E(RE_DX + 16), E(RE_DY + last + 36), E(146), E(26), SWP_NOZORDER | SWP_NOACTIVATE);
-        SetWindowPos(GetDlgItem(cm, IDR_INFO), nullptr, E(RE_DX + 16), E(RE_DY + last + 70), E(300), E(18), SWP_NOZORDER | SWP_NOACTIVATE);
+        for (int k = 0; k < 2; k++) re_show(IDR_F6 + k, chg);
     }
     if (nw || orig) re_tex1_sync(s);
     {   // gray: none, orange: made or dropped now, violet: already in the mod
@@ -826,7 +838,7 @@ static void re_panel() {
     EnableWindow(GetDlgItem(cm, IDR_FORM), re_cur >= 0 && re_cur < (int)re_cells.size() - 1);
     EnableWindow(GetDlgItem(cm, IDR_DEL), re_cur >= 0 && re_cur < (int)re_cells.size() - 1);
     if (!any || s == -1) for (int id = IDR_LT0; id <= IDR_FT1; id++) re_show(id, false);
-    if (!any) { re_set_text(IDR_TITLE, "Select a cell"); re_filling = false; InvalidateRect(cm, nullptr, TRUE); return; }
+    if (!any) { re_grows.clear(); re_set_text(IDR_TITLE, "Select a cell"); re_filling = false; InvalidateRect(cm, nullptr, TRUE); return; }
     re_set_text(IDR_TITLE, re_label(s));
     if (s == -1) re_set_text(IDR_SUB, "Random cell, always the last one");
     else if (nw) re_set_text(IDR_SUB, "New character\nPackfile/Characters/" + (c->id.empty() ? std::string("<ID>") : c->id));
@@ -863,6 +875,7 @@ static void re_panel() {
         bool form = id == IDR_LT1 || id == IDR_LT2 || (id >= IDR_LN0 + 3 && id < IDR_LN0 + 9) || (id >= IDR_LB0 + 3 && id < IDR_LB0 + 9);
         re_show(id, s >= 0 && !(tx && form));
     }
+    re_show(IDR_LHELP, false);
     for (int id = IDR_FTL; id <= IDR_FT1; id++) re_show(id, s >= 0 && tx);
     if (s >= 0 && tx) re_form_fill(s);
     for (int b = 0; b < 9; b++) InvalidateRect(GetDlgItem(cm, IDR_LB0 + b), nullptr, FALSE);
@@ -876,6 +889,7 @@ static void re_panel() {
         re_set_text(IDR_N0 + l, v);
         SendMessageW(GetDlgItem(cm, IDR_N0 + l), EM_SETCUEBANNER, TRUE, (LPARAM)(nw ? mw_w(c->id).c_str() : L""));
     }
+    re_general_layout(s, nw, orig, base, (nw || orig) && re_chg_on());
     re_filling = false;
     InvalidateRect(cm, nullptr, TRUE);
 }
@@ -976,7 +990,7 @@ static LRESULT CALLBACK re_img_proc(HWND h, UINT m, WPARAM w, LPARAM l) {
                 SelectObject(im, ob); DeleteDC(im); DeleteObject(bmp);
             }
         } else {
-            std::wstring t = std::wstring(RE_IMG_N[j]) + L" " + std::to_wstring(RE_IMG_W[j]) + L"x" + std::to_wstring(RE_IMG_H[j]);
+            std::wstring t = RE_IMG_N[j];
             SetBkMode(dc, TRANSPARENT); SetTextColor(dc, THEME_TEXT2);
             HGDIOBJ of = SelectObject(dc, theme_f_normal);
             DrawTextW(dc, t.c_str(), -1, &rc, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
@@ -1105,12 +1119,38 @@ static void re_lang_panel(int s, bool on) {
         if (k >= n) continue;
         HWND b = GetDlgItem(cm, IDR_LANG0 + k);
         SetWindowPos(b, nullptr, E(RE_DX + 16 + (w + 4) * k), E(RE_DY + 561), E(w), E(26), SWP_NOZORDER | SWP_NOACTIVATE);
-        std::wstring t = (w >= 90 ? L"Voices " : L"") + mw_w(re_pk_codes[k]);
-        wchar_t cur[64] = L""; GetWindowTextW(b, cur, 64);
-        if (t != cur) SetWindowTextW(b, t.c_str());
         auto it = c ? c->lang.find(re_pk_ids[k]) : std::map<std::string, std::string>::iterator();
         re_mark(IDR_LANG0 + k, c && it != c->lang.end() && !it->second.empty(), false, c && it != c->lang.end() && re_is_mod(it->second));
     }
+}
+// General page: one row per setting, label left, control right (x 884..1264); the creator paints labels, lines and file states
+static void re_general_layout(int s, bool nw, bool orig, bool base, bool chg) {
+    re_grows.clear();
+    for (int id : {IDR_TITLE, IDR_SUB, IDR_ID_L, IDR_SYS_L, IDR_BASE_L, IDR_N_L0, IDR_N_L1, IDR_N_L2, IDR_N2, IDR_IMG_L, IDR_IMG2, IDR_F_L, IDR_D_L, IDR_INFO}) ShowWindow(GetDlgItem(cm, id), SW_HIDE);
+    if (s < 0) return;
+    int y = 148;
+    auto place = [&](int id, int x, int yy, int w, int h) { SetWindowPos(GetDlgItem(cm, id), nullptr, E(x), E(yy), E(w), E(h), SWP_NOZORDER | SWP_NOACTIVATE); };
+    auto row = [&](const std::wstring& l, int h, int btn, int frame) { ReRow r; r.y = y; r.h = h; r.label = l; r.btn = btn; r.frame = frame; re_grows.push_back(r); y += h; };
+    auto edit = [&](int id, const wchar_t* l) { place(id, 1068, y + 4, 192, 24); row(l, 32, -1, id); };
+    auto combo = [&](int id, const wchar_t* l) { place(id, 1064, y + 3, 200, 320); row(l, 32, -1, -1); };
+    auto file = [&](int id, const std::wstring& l) { place(id, 1188, y + 3, 76, 26); row(l, 32, id, -1); };
+    if (nw) edit(IDR_ID, L"ID");
+    if (nw || orig) combo(IDR_SYS, L"BT3 id");
+    if (base) combo(IDR_BASE, L"SFX and voices of");
+    if (nw || orig) { edit(IDR_N0, L"Name EN"); edit(IDR_N1, L"Name ES"); }
+    if (nw) { place(IDR_IMG0, 1016, y + 4, 64, 52); place(IDR_IMG1, 1084, y + 4, 72, 52); place(IDR_IMG3, 1160, y + 4, 104, 52); row(L"Images", 60, -1, -1); }
+    if (!nw && !orig) return;
+    { ReRow c; c.y = y; c.h = 28; c.label = L"Files"; c.cap = true; re_grows.push_back(c); y += 28; }
+    place(IDR_CPREV, 884, y + 3, 26, 26); place(IDR_CNAME, 912, y + 3, 72, 26); place(IDR_CNEXT, 986, y + 3, 26, 26);
+    file(IDR_F0, L"");
+    file(IDR_T0, L"Damaged textures");
+    file(IDR_D0, L"Damaged char");
+    file(IDR_F4, L"SFX");
+    file(IDR_F5, L"Voices");
+    int n = re_lang_shown ? std::min(re_packs(), RE_LANG_N) : 0;
+    for (int k = 0; k < n; k++) file(IDR_LANG0 + k, L"Voices " + mw_w(re_pk_codes[k]));
+    if (chg) { file(IDR_F6, L"Charge aura (P2)"); file(IDR_F7, L"Charge anims (P1)"); }
+    place(IDR_PCM, 1188, y + 3, 76, 26); row(L"Pre CMAN", 32, -1, -1);
 }
 static void re_lang(int k, const std::string* dropped = nullptr) {
     ReChar* c = re_fchar(re_selected());
