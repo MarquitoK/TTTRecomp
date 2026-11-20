@@ -267,6 +267,7 @@ static void se_layout() {
     place(IDS_MAP, 1188, y + 3, 76, 26); row(L"Map", 32, IDS_MAP, -1);
     place(IDS_SFX, 1188, y + 3, 76, 26); row(L"SFX", 32, IDS_SFX, -1);
     if (m->sfx.empty()) { place(IDS_SFXOF, 1064, y + 3, 200, 320); row(L"SFX of", 32, -1, -1); }
+    cap(L"Rules");
     sw(IDS_TOUR, L"Tournament ring");
 }
 static void se_panel() { se_panel_fill(); se_layout(); }

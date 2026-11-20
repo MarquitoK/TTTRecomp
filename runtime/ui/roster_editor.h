@@ -23,7 +23,7 @@ enum { IDR_NEW = 3200, IDR_COPY, IDR_FORM, IDR_DEL, IDR_MOD_L, IDR_MOD, IDR_RESE
        IDR_F_L, IDR_F0, IDR_F1, IDR_F2, IDR_F3, IDR_F4, IDR_F5, IDR_F6, IDR_F7, IDR_D_L, IDR_D0, IDR_D1, IDR_D2, IDR_D3, IDR_T0, IDR_T1, IDR_T2, IDR_T3, IDR_CPREV, IDR_CNAME, IDR_CNEXT, IDR_LANG0, IDR_LANG1, IDR_LANG2, IDR_LANG3, IDR_INFO, IDR_GRID, IDR_FORMS_L, IDR_FORMS, IDR_SUM,
        IDR_PG0, IDR_PG1, IDR_LT0, IDR_LT1, IDR_LT2, IDR_LN0, IDR_LB0 = IDR_LN0 + 9, IDR_LHELP = IDR_LB0 + 9, IDR_FTL, IDR_FTC, IDR_FTN0, IDR_FTN1, IDR_FT0, IDR_FT1, IDR_PCM, IDR_PG2, IDR_PINFO, IDR_PCPREV, IDR_PCNAME, IDR_PCNEXT, IDR_PUNDO, IDR_PVIEW, IDR_PS0, IDR_PS_END = IDR_PS0 + 16, IDR_LAST };   // label boxes: kind * 3 + lang (name, form right, form left; en, es)
 
-struct ReChar { bool pcm = false; int sysid = -1, donor = 3; std::string id, name[3], img[4], file[14], bt3[10], dmg[10], tex1[10]; std::map<std::string, std::string> lang; };   // tex1: level 1 damage textures per colour ("on" = made on export, "mod:" = on disk)   // dmg: damaged costume per colour ("ttt:", "bt3:" or "dir:")   // file: "ttt:" pak or "dir:" folder; bt3: BT3 paks over a folder (\n)
+struct ReChar { bool pcm = false, keyed = false; std::string raw; int sysid = -1, donor = 3; std::string id, name[3], img[4], file[14], bt3[10], dmg[10], tex1[10]; std::map<std::string, std::string> lang; };   // tex1: level 1 damage textures per colour ("on" = made on export, "mod:" = on disk)   // dmg: damaged costume per colour ("ttt:", "bt3:" or "dir:")   // file: "ttt:" pak or "dir:" folder; bt3: BT3 paks over a folder (\n)
 struct ReOrig { std::string name[3]; int newid = -1; };   // an original character: own names, own BT3 id
 struct ReItem { int sys, kind; };
 struct ReGrid { HWND h = nullptr; int mode = 0, cols = 4, scroll = 0, sel = -1, marker = -1; std::vector<ReItem> items; int locked = -1; int cw = 118, ch = 98, iw = 110, ih = 62; };   // mode 2 picker, 3 label picker
@@ -654,19 +654,36 @@ static void re_remove() {
     re_drop_unused();
     re_rebuild();
 }
+// keyed characters ([character Key]): the editor uses the id the game gives that key when installed, else the first free one from 161
+static int re_key_id(const std::string& key) {
+    auto& d = roster::defs();
+    for (auto& c : d.chars) if (!c.key.empty() && c.sysid >= roster::SYS && roster::low(c.key) == roster::low(key) && !re_find(c.sysid)) return c.sysid;
+    for (int i = roster::SYS; i < roster::ALL; i++) {
+        bool used = re_find(i) != nullptr;
+        for (auto& c : d.chars) used = used || c.sysid == i;
+        if (!used) return i;
+    }
+    return -1;
+}
+static void re_move_id(int a, int b) {   // a character's editor data follows its new id
+    re_bitmaps_drop(a);
+    for (auto& cell : re_cells) for (auto& x : cell) if (x == a) x = b;
+    auto l = re_lab.find(a); if (l != re_lab.end()) { re_lab[b] = l->second; re_lab.erase(a); }
+    auto f = re_fref.find(a); if (f != re_fref.end()) { re_fref[b] = f->second; re_fref.erase(a); }
+}
 static int re_new_char() {
-    if ((int)re_chars.size() >= roster::NEW) { cm_notify(L"No free BT3 ids left"); return -1; }
+    int nk = 0; for (auto& o : re_chars) nk += o.keyed;
+    if (nk >= roster::DYN) { cm_notify(L"No room for more new characters (" + std::to_wstring(roster::DYN) + L" at once)"); return -1; }
     ReChar c;
-    c.sysid = re_free_id();
-    if (c.sysid < 0) return -1;
-    std::string base = re_bt3_name(c.sysid), id;
-    for (char ch : base) id += isalnum((unsigned char)ch) ? ch : '_';
-    if (!roster::valid_id(id)) id = "Character_" + std::to_string(c.sysid);
-    auto dup = [&](const std::string& x) { for (auto& o : re_chars) if (o.id == x) return true; return false; };
+    c.keyed = true;
+    std::string id = "New_Character";
+    auto dup = [&](const std::string& x) { for (auto& o : re_chars) if (roster::low(o.id) == roster::low(x)) return true; return false; };
     std::string cand = id;
     for (int k = 2; dup(cand); k++) cand = id + "_" + std::to_string(k);
     id = cand;
     c.id = id;
+    c.sysid = re_key_id(id);
+    if (c.sysid < 0) { cm_notify(L"No room for more new characters"); return -1; }
     re_chars.push_back(c);
     return c.sysid;
 }
@@ -847,6 +864,7 @@ static void re_panel() {
     SendMessageW(sys, CB_RESETCONTENT, 0, 0);
     if (s >= 0) {
         int cur = re_final(s);
+        if (nw) { int k = (int)SendMessageW(sys, CB_ADDSTRING, 0, (LPARAM)L"New id (no BT3 id)"); SendMessageW(sys, CB_SETITEMDATA, k, (LPARAM)-2); if (c->keyed) SendMessageW(sys, CB_SETCURSEL, k, 0); }
         for (int i = 0; i < roster::SYS; i++) {
             if (i != cur && i != s && re_id_taken(i, nw ? s : -1)) continue;
             if (orig && i != s && roster::vanilla(i)) continue;
@@ -1674,11 +1692,14 @@ static void re_command(int id, int code) {
     if (code == CBN_SELCHANGE && id == IDR_SYS && s >= 0) {
         HWND b = GetDlgItem(cm, IDR_SYS);
         int k = (int)SendMessageW(b, CB_GETCURSEL, 0, 0), v = (int)SendMessageW(b, CB_GETITEMDATA, k, 0);
-        if (c) {
+        if (c && v == -2) {
+            if (c->keyed) return;
+            int n = re_key_id(c->id);
+            if (n < 0) { cm_notify(L"No room for more new characters"); re_panel(); return; }
+            c->keyed = true; c->sysid = n; re_move_id(s, n);
+        } else if (c) {
             if (v == s || re_id_taken(v, s) || roster::vanilla(v)) return;
-            re_bitmaps_drop(s);
-            c->sysid = v;
-            for (auto& cell : re_cells) for (auto& x : cell) if (x == s) x = v;
+            c->keyed = false; c->sysid = v; re_move_id(s, v);
         } else {
             auto& o = re_orig[s];
             o.newid = v == s ? -1 : v;
@@ -1716,22 +1737,34 @@ static std::vector<std::string> re_load_mod(const std::string& root, const std::
     std::error_code ec;
     auto isf = [&](const std::string& p) { return std::filesystem::is_regular_file(std::filesystem::u8path(p), ec); };
     auto isd = [&](const std::string& p) { return std::filesystem::is_directory(std::filesystem::u8path(p), ec); };
+    std::map<std::string, int> keys;   // lowercase key -> editor id
     for (auto& x : d.chars) {
-        if (x.sysid < 0) continue;   // keyed characters: not in the editor yet
         ReChar c;
-        c.sysid = x.sysid; c.donor = x.donor; c.id = roster::valid_id(x.id) ? x.id : "";
+        c.keyed = !x.key.empty();
+        c.sysid = c.keyed ? re_key_id(x.key) : x.sysid;
+        if (c.sysid < 0) { printf("mods: %s: sin espacio en el editor para %s\n", mod.c_str(), x.key.c_str()); continue; }
+        if (c.keyed) keys[roster::low(x.key)] = c.sysid;
+        c.donor = x.donor; c.id = c.keyed ? x.key : roster::valid_id(x.id) ? x.id : "";
         for (int l = 0; l < 3; l++) c.name[l] = x.name[l];
-        for (const std::string& sub : {c.id, std::to_string(x.sysid)}) {
+        {   // keys the editor does not edit yet travel unchanged
+            std::string tf;
+            for (int i = 0; i < 4; i++) tf += (i ? ", " : "") + (x.tf_key[i].empty() ? std::string("-") : x.tf_key[i]);
+            bool anytf = false; for (auto& k : x.tf_key) anytf = anytf || !k.empty();
+            if (anytf) c.raw += "transform = " + tf + "\n";
+            for (auto& v : x.vs) c.raw += std::string(v.victory ? "victory" : "intro") + " = " + v.rival + " : " + std::to_string(v.line) + "\n";
+            if (!x.folder.empty() && x.folder != "Characters/" + x.id) c.raw += "folder = " + x.folder + "\n";
+        }
+        for (const std::string& sub : {c.id, c.keyed ? std::string() : std::to_string(x.sysid)}) {
             if (sub.empty()) continue;
             std::string b = root + "/" + mod + "/Roster/" + sub + "/";
             for (int j = 0; j < 4; j++) if (c.img[j].empty() && isf(b + RE_IMG[j] + ".png")) c.img[j] = b + RE_IMG[j] + ".png";
             for (int k = 0; k < 3; k++) for (int l = 0; l < 4; l++) {
                 if (l == 2) continue;
                 std::string f = b + RE_LAB_FILE[k] + (l < 3 ? std::string("_") + RE_LANG_C[l] : std::string()) + ".png";
-                if ((k || l < 3) && re_lab[x.sysid].img[k][l].empty() && isf(f)) re_lab[x.sysid].img[k][l] = f;
+                if ((k || l < 3) && re_lab[c.sysid].img[k][l].empty() && isf(f)) re_lab[c.sysid].img[k][l] = f;
             }
         }
-        for (int k = 0; k < 3; k++) for (int l = 0; l < 4; l++) re_lab[x.sysid].ref[k][l] = x.lab.ref[k][l];
+        for (int k = 0; k < 3; k++) for (int l = 0; l < 4; l++) re_lab[c.sysid].ref[k][l] = x.lab.ref[k][l];
         std::string folder = !x.folder.empty() ? x.folder : c.id.empty() ? "" : "Characters/" + c.id;
         if (!folder.empty() && folder.compare(0, 11, "Characters/") == 0 && folder.find('/', 11) == std::string::npos) {
             std::string b = root + "/" + mod + "/Packfile/" + folder + "/";
@@ -1771,7 +1804,10 @@ static std::vector<std::string> re_load_mod(const std::string& root, const std::
             if (!f.empty() && isd(dd)) re_ochar[roster::VANILLA[k]].dmg[j] = "mod:" + dd;
         }
     re_ftab = d.ftext;
-    for (auto& x : d.chars) if (x.form >= -1) re_fref[x.sysid] = x.form;
+    for (auto& x : d.chars) {
+        int sid = x.key.empty() ? x.sysid : keys.count(roster::low(x.key)) ? keys[roster::low(x.key)] : -1;
+        if (x.form >= -1 && sid >= 0) re_fref[sid] = x.form;
+    }
     for (auto& x : d.renames) if (x.form >= -1) re_fref[x.sysid] = x.form;
     for (auto& r : d.renames) {
         ReOrig o; for (int l = 0; l < 3; l++) o.name[l] = r.name[l]; o.newid = r.newid >= 0 && r.newid != r.sysid ? r.newid : -1;
@@ -1791,7 +1827,7 @@ static std::vector<std::string> re_load_mod(const std::string& root, const std::
         for (auto& l : d.layout) {
             std::vector<int> c;
             for (int v : l) {
-                if (v < -1) continue;
+                if (v < -1) { auto k = keys.find(roster::low(d.keyrefs[-v - 2])); if (k == keys.end()) continue; v = k->second; }
                 for (auto& o : re_orig) if (v >= 0 && o.second.newid == v) v = o.first;   // the file holds an original's own BT3 id
                 if (v < 0 || roster::vanilla(v) || re_find(v)) c.push_back(v);
             }
@@ -1923,8 +1959,8 @@ static bool re_validate(std::wstring& err) {
         auto& c = re_chars[i];
         std::string low = c.id;
         for (auto& ch : low) ch = (char)tolower((unsigned char)ch);
-        if (!roster::valid_id(c.id) || !ids.insert(low).second) {
-            err = c.id.empty() ? L"A new character has no ID" : L"The ID " + mw_w(c.id) + L" is repeated";
+        if (!roster::valid_id(c.id) || !ids.insert(low).second || (c.keyed && isdigit((unsigned char)c.id[0]))) {
+            err = c.id.empty() ? L"A new character has no ID" : c.keyed && isdigit((unsigned char)c.id[0]) ? L"The ID " + mw_w(c.id) + L" must start with a letter" : L"The ID " + mw_w(c.id) + L" is repeated";
             for (size_t k = 0; k < re_cells.size(); k++) for (size_t j = 0; j < re_cells[k].size(); j++)
                 if (re_cells[k][j] == c.sysid) { re_cur = (int)k; re_form = j ? (int)j - 1 : -1; }
             return false;
@@ -1988,7 +2024,7 @@ static bool re_export(const ReAdd& add, int& files, std::wstring& err) {
         t += "[layout]\n";
         for (auto& c : re_cells) {
             std::string line;
-            for (int v : c) line += (line.empty() ? "" : " ") + (v < 0 ? std::string("random") : std::to_string(re_final(v)));
+            for (int v : c) { ReChar* k = re_find(v); line += (line.empty() ? "" : " ") + (v < 0 ? std::string("random") : k && k->keyed ? k->id : std::to_string(re_final(v))); }
             t += line + "\n";
         }
     }
@@ -2001,11 +2037,12 @@ static bool re_export(const ReAdd& add, int& files, std::wstring& err) {
     }
     static const char* L[2] = {"name_en", "name_es"};
     for (auto& c : re_chars) {
-        t += "\n[character " + std::to_string(c.sysid) + "]\nid = " + c.id + "\n";
+        t += c.keyed ? "\n[character " + c.id + "]\n" : "\n[character " + std::to_string(c.sysid) + "]\nid = " + c.id + "\n";
         for (int l = 0; l < 2; l++) if (!c.name[l].empty()) t += std::string(L[l]) + " = " + c.name[l] + "\n";
         t += "base = " + (c.file[RF_SFX].empty() || c.file[RF_VOICES].empty() ? std::to_string(c.donor < 0 ? 3 : c.donor) : std::string("none")) + "\n";
         t += re_form_keys(c.sysid);
         t += re_lab_keys(c.sysid);
+        t += c.raw;
     }
     std::set<int> origs;
     for (auto& r : re_orig) origs.insert(r.first);
