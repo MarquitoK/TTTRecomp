@@ -17,13 +17,18 @@ static StageState& st_get() {
     stg.ready = true;
     int b = psp_stage_base();
     auto& d = stages::defs();
-    if (b >= 0 && !d.maps.empty()) {
-        stg.base = b;
-        stg.n = stages::OLD + (int)d.maps.size();
+    int ot = 0;
+    for (int i = 0; i < stages::OLD; i++) ot += d.otour[i] > 0;
+    if (b >= 0 && (!d.maps.empty() || ot)) {
         stg.tour.assign(ST_CELLS, 0);
-        int nt = 0;
-        for (size_t j = 0; j < d.maps.size(); j++) if (d.maps[j].tour) { stg.tour[stages::OLD + j] = 1; nt++; }
-        printf("mapas: %d mapas en la seleccion (%d nuevos, %d con reglas de torneo), Random en %d\n", stg.n, stg.n - stages::OLD, nt, stg.n);
+        for (int i = 0; i < stages::OLD; i++) if (d.otour[i] > 0) stg.tour[i] = 1;
+        if (!d.maps.empty()) {
+            stg.base = b;
+            stg.n = stages::OLD + (int)d.maps.size();
+            int nt = ot;
+            for (size_t j = 0; j < d.maps.size(); j++) if (d.maps[j].tour) { stg.tour[stages::OLD + j] = 1; nt++; }
+            printf("mapas: %d mapas en la seleccion (%d nuevos, %d con reglas de torneo), Random en %d\n", stg.n, stg.n - stages::OLD, nt, stg.n);
+        } else printf("mapas: %d mapas originales con reglas de torneo\n", ot);
     }
     return stg;
 }
@@ -135,6 +140,13 @@ static bool st_wrap(uint32_t dir, Ctx& c, void (*orig)(Ctx&)) {
         return true;
     }
     StageState& g = st_get();
+    static std::set<uint32_t> tour_ra(std::begin(ST_TOUR_RA), std::end(ST_TOUR_RA));
+    if (g.base < 0 && dir == 0x08858764u && !g.tour.empty() && tour_ra.count(c.r[31])) {   // only originals have tournament rules
+        orig(c);
+        uint32_t v = c.r[2];
+        if (v < (uint32_t)stages::OLD) c.r[2] = g.tour[v] ? 10u : 0u;
+        return true;
+    }
     if (g.base < 0) return false;
     if (dir == 0x08A07170u) {   // availability: new maps are always offered
         uint32_t i = c.r[5];
@@ -146,7 +158,6 @@ static bool st_wrap(uint32_t dir, Ctx& c, void (*orig)(Ctx&)) {
         orig(c);
         uint32_t v = c.r[2];
         if (ra == 0x0887BF9Cu || ra == 0x089149ACu) { if (v >= (uint32_t)stages::OLD) c.r[2] = 0; return true; }
-        static std::set<uint32_t> tour_ra(std::begin(ST_TOUR_RA), std::end(ST_TOUR_RA));
         if (tour_ra.count(ra)) c.r[2] = v < ST_CELLS && g.tour[v] ? 10u : 0u;
         return true;
     }

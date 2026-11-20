@@ -22,7 +22,7 @@ struct Map {
     std::string name[2];   // en, es (empty = the other language, then the id)
     std::string destroy_to, planet;   // item 71: map that replaces it when the planet is destroyed (id, 1..10 or none); planet = earth|namek marks a destroyed planet map
 };
-struct Defs { bool loaded = false; std::vector<Map> maps; std::string orig[OLD + 1][2]; };   // orig: names given to the originals and Random ([original] n = 1..11)
+struct Defs { bool loaded = false; std::vector<Map> maps; std::string orig[OLD + 1][2]; int otour[OLD] = {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1}; };   // otour: tournament rules on an original map (-1 unset)   // orig: names given to the originals and Random ([original] n = 1..11)
 inline Defs& defs() { static Defs d; return d; }
 
 inline bool valid_id(const std::string& id) {
@@ -36,7 +36,7 @@ inline std::string trim(const std::string& s) {
     return a == std::string::npos ? "" : s.substr(a, b - a + 1);
 }
 
-// [stage] blocks in file order: id (folder Packfile/Maps/<id>), tournament = 0/1, sfx = 1..10 (original map, 1-based)
+// [stage] blocks in file order: id (folder Packfile/Maps/<id>), tournament = 0/1, sfx = 1..10 (original map, 1-based); [original] n, name_en, name_es, tournament
 inline void read_file(const std::string& path, const std::string& mod, Defs& d) {
     FILE* f = fopen(path.c_str(), "rb");
     if (!f) return;
@@ -44,6 +44,7 @@ inline void read_file(const std::string& path, const std::string& mod, Defs& d) 
     Map* cur = nullptr;
     int on = -1;
     std::string oname[OLD + 1][2];
+    int ot[OLD] = {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1};
     std::vector<Map> got;
     bool first = true;
     while (fgets(line, sizeof(line), f)) {
@@ -67,6 +68,7 @@ inline void read_file(const std::string& path, const std::string& mod, Defs& d) 
             if (on == -2) continue;
             if (k == "n") { int x = atoi(v.c_str()); on = x >= 1 && x <= OLD + 1 ? x - 1 : -2; }
             else if (on >= 0 && (k == "name_en" || k == "name_es")) oname[on][k == "name_es"] = v;
+            else if (on >= 0 && on < OLD && k == "tournament") ot[on] = atoi(v.c_str()) != 0;
             continue;
         }
         if (!cur) continue;
@@ -79,6 +81,7 @@ inline void read_file(const std::string& path, const std::string& mod, Defs& d) 
     }
     fclose(f);
     for (int i = 0; i <= OLD; i++) for (int l = 0; l < 2; l++) if (d.orig[i][l].empty()) d.orig[i][l] = oname[i][l];   // a higher-priority mod first
+    for (int i = 0; i < OLD; i++) if (d.otour[i] < 0) d.otour[i] = ot[i];
     for (auto& m : got) {
         if (!valid_id(m.id)) { printf("mapas: %s: id '%s' no valido (solo letras, numeros, _ y -)\n", mod.c_str(), m.id.c_str()); continue; }
         bool taken = false;

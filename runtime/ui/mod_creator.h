@@ -11,9 +11,9 @@ static HBITMAP cm_bmp = nullptr;
 static std::vector<CmContenido> cm_content;
 static std::string cm_img;
 static std::vector<std::pair<std::string, std::string>> cm_extra;   // mod.txt keys the creator does not edit (voces, codigo, parches...)
-static const int CM_IMG_W = 480, CM_IMG_H = 270;
+static const int CM_IMG_W = 464, CM_IMG_H = 261;
 static const int CM_DY = 40, CM_W[3] = {1280, 1280, 1280}, CM_H[3] = {720, 720, 720}, CM_RAIL = 168;
-static const int CM_FIELDS[5][4] = {{100, 64 + CM_DY, 470, 24}, {100, 94 + CM_DY, 120, 24}, {280, 94 + CM_DY, 290, 24}, {100, 124 + CM_DY, 470, 24}, {100, 154 + CM_DY, 470, 150}};   // x relative to the page (the rail is added)
+static const int CM_FIELDS[5][4] = {{180, 30, 408, 24}, {180, 66, 120, 24}, {180, 102, 408, 24}, {180, 138, 408, 24}, {180, 174, 408, 110}};   // x relative to the page (the rail is added); rows end at y 60, 96, 132, 168, 292
 static int cm_tab = 0, cm_mk = -1, cm_dx = 0, cm_dy = 0;
 static std::vector<HWND> cm_page[3];
 
@@ -517,7 +517,7 @@ static void cm_select_tab(int k) {
         if (y + h > mi.rcWork.bottom) y = std::max((int)mi.rcWork.top, (int)mi.rcWork.bottom - h);
     }
     SetWindowPos(cm, nullptr, x, y, w, h, SWP_NOZORDER | SWP_NOACTIVATE);
-    cm_place(IDC_NOTICE, CM_RAIL + 16, H - 40, k == 1 ? 684 : W - CM_RAIL - 32, 28);
+    cm_place(IDC_NOTICE, CM_RAIL + 16, H - 40, k >= 1 ? 684 : W - CM_RAIL - 32, 28);
     cm_place(IDC_SAVE, 12, H - 130, 144, 32);
     cm_place(IDC_CREATE, 12, H - 92, 144, 32);
     cm_place(IDC_CLOSE, 12, H - 54, 144, 32);
@@ -563,6 +563,7 @@ static void cm_command(int id) {
     }
 }
 
+static void cm_paint_rows(HDC dc, const std::vector<ReRow>& rows, const wchar_t* added);
 // Select screen right column: header (render, name, kind) and the General rows laid out by re_general_layout
 static void cm_paint_general(HDC dc, int s, bool nw, bool orig) {
     SetBkMode(dc, TRANSPARENT);
@@ -575,11 +576,17 @@ static void cm_paint_general(HDC dc, int s, bool nw, bool orig) {
         RECT t = {E(884), E(56), E(1264), E(92)};
         rv_text(dc, L"Select a cell", t, THEME_TEXT2, theme_f_normal);
     }
-    HPEN line = CreatePen(PS_SOLID, 1, THEME_BORDER), sep = CreatePen(PS_SOLID, 1, RGB(42, 48, 59));
+    HPEN line = CreatePen(PS_SOLID, 1, THEME_BORDER);
     HGDIOBJ op = SelectObject(dc, line);
     MoveToEx(dc, E(884), E(140), nullptr); LineTo(dc, E(1264), E(140));
-    SelectObject(dc, sep);
-    if (re_page == 0 && (nw || orig)) for (auto& r : re_grows) {
+    SelectObject(dc, op); DeleteObject(line);
+    if (re_page == 0 && (nw || orig)) cm_paint_rows(dc, re_grows, nw ? L"Added" : L"Replaced");
+}
+static void cm_paint_rows(HDC dc, const std::vector<ReRow>& rows, const wchar_t* added) {
+    SetBkMode(dc, TRANSPARENT);
+    HPEN sep = CreatePen(PS_SOLID, 1, RGB(42, 48, 59));
+    HGDIOBJ op = SelectObject(dc, sep);
+    for (auto& r : rows) {
         if (r.cap) { RECT c = {E(884), E(r.y + 8), E(1264), E(r.y + r.h)}; rv_text(dc, r.label, c, THEME_TEXT2, theme_f_normal); continue; }
         if (!r.label.empty()) { RECT c = {E(884), E(r.y), E(1060), E(r.y + r.h)}; rv_text(dc, r.label, c, THEME_TEXT, theme_f_normal); }
         MoveToEx(dc, E(884), E(r.y + r.h) - 1, nullptr); LineTo(dc, E(1264), E(r.y + r.h) - 1);
@@ -588,14 +595,31 @@ static void cm_paint_general(HDC dc, int s, bool nw, bool orig) {
         if (r.btn < 0 || it == re_st.end()) continue;
         int st = it->second;
         static const COLORREF BG[4] = {RGB(42, 48, 59), RGB(29, 53, 80), RGB(58, 43, 85), RGB(74, 50, 21)}, FG[4] = {THEME_TEXT2, RGB(156, 198, 240), RGB(205, 184, 242), RGB(255, 207, 143)};
-        std::wstring t = st == 0 ? L"None" : st == 1 ? L"Game" : st == 2 ? L"This mod" : r.btn == IDR_T0 ? L"On" : nw ? L"Added" : L"Replaced";
+        std::wstring t = st == 0 ? L"None" : st == 1 ? L"Game" : st == 2 ? L"This mod" : r.btn == IDR_T0 ? L"On" : added;
         HGDIOBJ of = SelectObject(dc, theme_f_normal); SIZE sz; GetTextExtentPoint32W(dc, t.c_str(), (int)t.size(), &sz); SelectObject(dc, of);
         int w = sz.cx + E(16), x = E(1180) - w, y = E(r.y + 6);
         rv_round(dc, x, y, w, E(20), E(10), BG[st]);
         RECT c = {x, y, x + w, y + E(20)};
         rv_text(dc, t, c, FG[st], theme_f_normal, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
     }
-    SelectObject(dc, op); DeleteObject(line); DeleteObject(sep);
+    SelectObject(dc, op); DeleteObject(sep);
+}
+static void cm_paint_maps(HDC dc) {
+    SetBkMode(dc, TRANSPARENT);
+    if (HBITMAP b = se_bitmap(se_cur)) {
+        HDC im = CreateCompatibleDC(dc); HGDIOBJ o = SelectObject(im, b);
+        SetStretchBltMode(dc, HALFTONE);
+        StretchBlt(dc, E(884), E(56), E(72), E(36), im, 0, 0, E(SE_IW), E(SE_IH), SRCCOPY);
+        SelectObject(im, o); DeleteDC(im);
+    }
+    RECT t = {E(968), E(54), E(1264), E(76)}, u = {E(968), E(74), E(1264), E(94)};
+    rv_text(dc, mw_w(se_label(se_cur)), t, THEME_TEXT, theme_f_bold);
+    rv_text(dc, se_sel() ? L"New map" : se_cur < stages::OLD ? L"Game map" : L"Random, picks any map", u, THEME_TEXT2, theme_f_normal);
+    HPEN line = CreatePen(PS_SOLID, 1, THEME_BORDER);
+    HGDIOBJ op = SelectObject(dc, line);
+    MoveToEx(dc, E(884), E(104), nullptr); LineTo(dc, E(1264), E(104));
+    SelectObject(dc, op); DeleteObject(line);
+    cm_paint_rows(dc, se_grows, L"Added");
 }
 
 static LRESULT CALLBACK cm_proc(HWND h, UINT m, WPARAM w, LPARAM l) {
@@ -628,11 +652,14 @@ static LRESULT CALLBACK cm_proc(HWND h, UINT m, WPARAM w, LPARAM l) {
         { RECT rr; GetClientRect(h, &rr); rr.right = E(CM_RAIL); HBRUSH b = CreateSolidBrush(RV_RAIL); FillRect(dc, &rr, b); DeleteObject(b); }
         if (cm_tab == 0) {
             for (auto& c : CM_FIELDS) theme_frame_e(dc, c[0] + CM_RAIL - 4, c[1] - 3, c[2] + 8, c[3] + 6);
-            theme_frame_e(dc, 783, 15 + CM_DY, CM_IMG_W + 2, CM_IMG_H + 2);
-            theme_frame_e(dc, 783, 389, 482, 162);
+            theme_frame_e(dc, 799, 23, CM_IMG_W + 2, CM_IMG_H + 2);
+            theme_frame_e(dc, 799, 363, 466, 216);
+            HPEN sep = CreatePen(PS_SOLID, 1, RGB(42, 48, 59)); HGDIOBJ op = SelectObject(dc, sep);
+            for (int y : {60, 96, 132, 168, 292}) { MoveToEx(dc, E(184), E(y), nullptr); LineTo(dc, E(760), E(y)); }
+            SelectObject(dc, op); DeleteObject(sep);
         } else if (cm_tab == 2) {
-            if (se_sel()) theme_frame_e(dc, 268, 193, 216, 30);
-            theme_frame_e(dc, 499, 129, 614, 472);
+            theme_frame_e(dc, 183, 63, 614, 594);
+            cm_paint_maps(dc);
         } else if (re_view == 0) {
             HPEN p = CreatePen(PS_SOLID, 1, THEME_BORDER); HGDIOBJ op = SelectObject(dc, p);
             MoveToEx(dc, E(412), E(124), nullptr); LineTo(dc, E(1264), E(124));
@@ -670,7 +697,7 @@ static void cm_open() {
         RegisterClassW(&wc);
         registered = true;
     }
-    const int CH = CM_H[0], D = CM_DY;
+    const int CH = CM_H[0];
     HANDLE ctx; ULONG_PTR cookie = 0;
     visual_styles(&ctx, &cookie);
     cm = theme_create(L"TTTRecompCrearMod", L"Create mod", CM_W[0], CH, WS_EX_DLGMODALFRAME | WS_EX_ACCEPTFILES);
@@ -685,30 +712,28 @@ static void cm_open() {
         cm_ctl(L"BUTTON", L"Maps", BS_OWNERDRAW | WS_TABSTOP, 8, 232, 152, 36, IDC_TAB2);
         cm_mk = 0;
         cm_dx = CM_RAIL;
-        cm_ctl(L"STATIC", L"The .mkpak stores your files with their Packfile or Shared path, the image and the details.", 0, 16, 38 + D, 1080, 18, IDC_SUB);
-        cm_ctl(L"STATIC", L"Name", 0, 16, 68 + D, 80, 18, -1);
+        cm_ctl(L"STATIC", L"Name", 0, 16, 33, 140, 18, -1);
         cm_ctl(L"EDIT", L"", ES_AUTOHSCROLL | WS_TABSTOP, CM_FIELDS[0][0], CM_FIELDS[0][1], CM_FIELDS[0][2], CM_FIELDS[0][3], IDC_NAME);
-        cm_ctl(L"STATIC", L"Version", 0, 16, 98 + D, 80, 18, -1);
+        cm_ctl(L"STATIC", L"Version", 0, 16, 69, 140, 18, -1);
         cm_ctl(L"EDIT", L"1.0", ES_AUTOHSCROLL | WS_TABSTOP, CM_FIELDS[1][0], CM_FIELDS[1][1], CM_FIELDS[1][2], CM_FIELDS[1][3], IDC_VERSION);
-        cm_ctl(L"STATIC", L"Author", 0, 232, 98 + D, 44, 18, -1);
+        cm_ctl(L"STATIC", L"Author", 0, 16, 105, 140, 18, -1);
         cm_ctl(L"EDIT", L"", ES_AUTOHSCROLL | WS_TABSTOP, CM_FIELDS[2][0], CM_FIELDS[2][1], CM_FIELDS[2][2], CM_FIELDS[2][3], IDC_AUTHOR);
-        cm_ctl(L"STATIC", L"Link", 0, 16, 128 + D, 80, 18, -1);
+        cm_ctl(L"STATIC", L"Link", 0, 16, 141, 140, 18, -1);
         cm_ctl(L"EDIT", L"", ES_AUTOHSCROLL | WS_TABSTOP, CM_FIELDS[3][0], CM_FIELDS[3][1], CM_FIELDS[3][2], CM_FIELDS[3][3], IDC_LINK);
-        cm_ctl(L"STATIC", L"Description", 0, 16, 158 + D, 80, 18, -1);
+        cm_ctl(L"STATIC", L"Description", 0, 16, 177, 140, 18, -1);
         HWND de = cm_ctl(L"EDIT", L"", ES_MULTILINE | ES_AUTOVSCROLL | ES_WANTRETURN | WS_VSCROLL | WS_TABSTOP, CM_FIELDS[4][0], CM_FIELDS[4][1], CM_FIELDS[4][2], CM_FIELDS[4][3], IDC_DESC);
         theme_control(de);
-        cm_ctl(L"STATIC", L"Tags", 0, 16, 316 + D, 80, 18, -1);
-        for (int i = 0; i < MOD_NTAGS; i++) cm_label[i] = cm_ctl(L"BUTTON", MOD_TAGS[i], BS_OWNERDRAW | WS_TABSTOP, 16 + (i % 5) * 118, 338 + D + (i / 5) * 32, 112, 26, IDC_LABEL + i);
-        cm_dx = 144;
-        cm_image = cm_ctl(L"STATIC", L"", SS_BITMAP | SS_CENTERIMAGE, 640, 16 + D, CM_IMG_W, CM_IMG_H, IDC_IMAGE);
-        cm_ctl(L"BUTTON", L"Choose image...", BS_OWNERDRAW | WS_TABSTOP, 640, 334, 132, 26, IDC_PICK_IMG);
-        cm_ctl(L"BUTTON", L"Remove image", BS_OWNERDRAW | WS_TABSTOP, 780, 334, 132, 26, IDC_REMOVE_IMG);
-        cm_ctl(L"STATIC", L"Contents", 0, 640, 368, 120, 18, -1);
-        cm_list = cm_ctl(L"LISTBOX", L"", LBS_NOTIFY | LBS_NOINTEGRALHEIGHT | WS_VSCROLL | WS_TABSTOP, 644, 394, 472, 154, IDC_LIST);
+        cm_ctl(L"STATIC", L"Tags", 0, 16, 304, 140, 18, IDC_SUB);
+        for (int i = 0; i < MOD_NTAGS; i++) cm_label[i] = cm_ctl(L"BUTTON", MOD_TAGS[i], BS_OWNERDRAW | WS_TABSTOP, 16 + (i % 5) * 114, 328 + (i / 5) * 34, 106, 26, IDC_LABEL + i);
+        cm_dx = 0;
+        cm_image = cm_ctl(L"STATIC", L"", SS_BITMAP | SS_CENTERIMAGE, 800, 24, CM_IMG_W, CM_IMG_H, IDC_IMAGE);
+        cm_ctl(L"BUTTON", L"Choose image", BS_OWNERDRAW | WS_TABSTOP, 800, 296, 132, 28, IDC_PICK_IMG);
+        cm_ctl(L"BUTTON", L"Remove", BS_OWNERDRAW | WS_TABSTOP, 940, 296, 100, 28, IDC_REMOVE_IMG);
+        cm_ctl(L"STATIC", L"Contents", 0, 800, 340, 140, 18, IDC_HINT);
+        cm_list = cm_ctl(L"LISTBOX", L"", LBS_NOTIFY | LBS_NOINTEGRALHEIGHT | WS_VSCROLL | WS_TABSTOP, 804, 368, 456, 206, IDC_LIST);
         theme_control(cm_list);
-        cm_ctl(L"BUTTON", L"Add folder...", BS_OWNERDRAW | WS_TABSTOP, 640, 560, 132, 26, IDC_ADD);
-        cm_ctl(L"BUTTON", L"Remove", BS_OWNERDRAW | WS_TABSTOP, 780, 560, 132, 26, IDC_REMOVE);
-        cm_ctl(L"STATIC", L"Drop folders or files from Packfile or Shared (assets or a mod) and the PNG image.", 0, 640, 594, 480, 36, IDC_HINT);
+        cm_ctl(L"BUTTON", L"Add folder", BS_OWNERDRAW | WS_TABSTOP, 800, 588, 132, 28, IDC_ADD);
+        cm_ctl(L"BUTTON", L"Remove", BS_OWNERDRAW | WS_TABSTOP, 940, 588, 100, 28, IDC_REMOVE);
 
         cm_mk = 1;
         cm_dx = cm_dy = 0;
@@ -790,7 +815,7 @@ static void cm_open() {
         cm_dx = CM_RAIL;
         se_controls();
         cm_dx = 0;
-        MoveWindow(se_grid, E(500), E(130), E(612), E(470), TRUE);
+        MoveWindow(se_grid, E(184), E(64), E(612), E(592), TRUE);
         cm_mk = -1;
 
         cm_ctl(L"STATIC", L"Mod to edit", 0, 16, 50, 140, 18, IDR_MOD_L);

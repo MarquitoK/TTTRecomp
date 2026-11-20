@@ -12,8 +12,10 @@ static std::vector<SeMap> se_maps;
 static SeFx se_ofx[stages::OLD];
 std::string psp_orig_map_stem(int i);
 static void se_fx_panel();
+static struct SeFx* se_fx_cur();
 static bool se_bt3_stage(const std::string& f);
 static std::string se_oname[stages::OLD + 1][2];   // names given to the originals and Random (empty = the game's)
+static bool se_otour[stages::OLD];   // tournament rules on an original map
 static int se_cur = 0, se_scroll = 0;
 static bool se_filling = false;
 static HWND se_grid = nullptr;
@@ -203,7 +205,7 @@ static LRESULT CALLBACK se_grid_proc(HWND h, UINT msg, WPARAM w, LPARAM l) {
 // ---------------- side panel ----------------
 static void se_show(int id, bool on) { if (HWND c = GetDlgItem(cm, id)) ShowWindow(c, on && cm_tab == 2 ? SW_SHOW : SW_HIDE); }
 static std::string se_file_name(const std::string& f) { std::string p = f.substr(4); size_t s = p.find_last_of("/\\"); return s == std::string::npos ? p : p.substr(s + 1); }
-static void se_panel() {
+static void se_panel_fill() {
     SeMap* m = se_sel();
     bool nw = m != nullptr;
     re_set_text(IDS_TITLE, se_label(se_cur));
@@ -222,15 +224,17 @@ static void se_panel() {
         SendMessageW(e, EM_SETCUEBANNER, TRUE, (LPARAM)(nw ? mw_w(m->id).c_str() : L""));
     }
     se_filling = false;
-    if (!nw) { InvalidateRect(cm, nullptr, TRUE); return; }
+    if (!nw) { re_mark(IDS_TOUR, se_cur < stages::OLD && se_otour[se_cur]); InvalidateRect(cm, nullptr, TRUE); return; }
     se_filling = true;
     SetWindowTextW(GetDlgItem(cm, IDS_ID), mw_w(m->id).c_str());
     SendMessageW(GetDlgItem(cm, IDS_SFXOF), CB_SETCURSEL, m->sfxof, 0);
     se_filling = false;
-    SetWindowTextW(GetDlgItem(cm, IDS_MAP), m->map.empty() ? L"Map" : (L"Map: " + mw_w(se_file_name(m->map))).c_str());
-    SetWindowTextW(GetDlgItem(cm, IDS_SFX), m->sfx.empty() ? L"SFX" : (L"SFX: " + mw_w(se_file_name(m->sfx))).c_str());
-    re_mark(IDS_MAP, !m->map.empty());
-    re_mark(IDS_SFX, !m->sfx.empty());
+    for (int id : {(int)IDS_MAP, (int)IDS_SFX}) {
+        bool on = !(id == IDS_MAP ? m->map : m->sfx).empty();
+        re_st[id] = on ? 3 : 0;
+        SetWindowTextW(GetDlgItem(cm, id), on ? L"Replace" : L"Add");
+        InvalidateRect(GetDlgItem(cm, id), nullptr, TRUE);
+    }
     re_mark(IDS_TOUR, m->tour);
     std::string info = m->map.empty() ? "Missing: the map pak" : "";
     if (m->sfx.empty()) info += (info.empty() ? "" : "\n") + std::string("No SFX: uses those of ") + stages::NAMES[m->sfxof];
@@ -238,11 +242,39 @@ static void se_panel() {
     for (int id : {(int)IDS_BIG, (int)IDS_SMALL, (int)IDS_NB0, IDS_NB0 + 1, IDS_NB0 + 2}) InvalidateRect(GetDlgItem(cm, id), nullptr, FALSE);
     InvalidateRect(cm, nullptr, TRUE);
 }
+// right column rows (x 884..1264), painted by the creator like the Select screen's General page
+static std::vector<ReRow> se_grows;
+static void se_layout() {
+    se_grows.clear();
+    for (int id : {(int)IDS_TITLE, (int)IDS_SUB, (int)IDS_ID_L, (int)IDS_IMG_L, (int)IDS_NL0, IDS_NL0 + 1, (int)IDS_F_L, (int)IDS_SFX_L, (int)IDS_INFO}) ShowWindow(GetDlgItem(cm, id), SW_HIDE);
+    SeMap* m = se_sel();
+    bool nw = m != nullptr;
+    int y = 112;
+    auto place = [&](int id, int x, int yy, int w, int h) { SetWindowPos(GetDlgItem(cm, id), nullptr, E(x), E(yy), E(w), E(h), SWP_NOZORDER | SWP_NOACTIVATE); };
+    auto row = [&](const std::wstring& l, int h, int btn, int frame) { ReRow r; r.y = y; r.h = h; r.label = l; r.btn = btn; r.frame = frame; se_grows.push_back(r); y += h; };
+    auto cap = [&](const wchar_t* l) { ReRow r; r.y = y; r.h = 28; r.label = l; r.cap = true; se_grows.push_back(r); y += 28; };
+    auto edit = [&](int id, const wchar_t* l) { place(id, 1068, y + 4, 192, 24); row(l, 32, -1, id); };
+    auto sw = [&](int id, const wchar_t* l) { place(id, 1224, y + 3, 40, 26); row(l, 32, -1, -1); };
+    if (nw) edit(IDS_ID, L"ID");
+    if (nw) { place(IDS_SMALL, 1084, y + 4, 72, 52); place(IDS_BIG, 1160, y + 4, 104, 52); row(L"Images", 60, -1, -1); }
+    edit(IDS_NB0, L"Name EN"); edit(IDS_NB0 + 1, L"Name ES");
+    if (se_fx_cur()) { cap(L"Effects"); sw(IDS_FX0, L"Heat haze"); sw(IDS_FX1, L"Bubbles"); sw(IDS_FX2, L"Storm"); }
+    if (!nw) {
+        if (se_cur < stages::OLD) { cap(L"Rules"); sw(IDS_TOUR, L"Tournament ring"); se_show(IDS_TOUR, true); }
+        return;
+    }
+    cap(L"Files");
+    place(IDS_MAP, 1188, y + 3, 76, 26); row(L"Map", 32, IDS_MAP, -1);
+    place(IDS_SFX, 1188, y + 3, 76, 26); row(L"SFX", 32, IDS_SFX, -1);
+    if (m->sfx.empty()) { place(IDS_SFXOF, 1064, y + 3, 200, 320); row(L"SFX of", 32, -1, -1); }
+    sw(IDS_TOUR, L"Tournament ring");
+}
+static void se_panel() { se_panel_fill(); se_layout(); }
 static void se_rebuild() {
     if (se_cur >= se_count()) se_cur = se_count() - 1;
     se_scrollbar();
     if (se_grid) InvalidateRect(se_grid, nullptr, FALSE);
-    int tour = 0; for (auto& m : se_maps) tour += m.tour;
+    int tour = 0; for (auto& m : se_maps) tour += m.tour; for (bool t : se_otour) tour += t;
     std::wstring s = std::to_wstring(stages::OLD + se_maps.size()) + L" maps   |   " + std::to_wstring(se_maps.size()) + L" new";
     if (tour) s += L"   |   " + std::to_wstring(tour) + L" with tournament ring";
     SetWindowTextW(GetDlgItem(cm, IDS_SUM), s.c_str());
@@ -459,7 +491,7 @@ static LRESULT CALLBACK se_img_proc(HWND h, UINT msg, WPARAM w, LPARAM l) {
             }
         } else if (box >= 0) {
             int j = box < 2 ? box : 2;
-            std::wstring t = std::wstring(SE_IMG_N[j]) + L" " + std::to_wstring(SE_W[j]) + L"x" + std::to_wstring(SE_H[j]);
+            std::wstring t = SE_IMG_N[j];
             SetBkMode(dc, TRANSPARENT); SetTextColor(dc, THEME_TEXT2);
             HGDIOBJ of = SelectObject(dc, theme_f_normal);
             DrawTextW(dc, t.c_str(), -1, &rc, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
@@ -572,7 +604,7 @@ static void se_command(int id, int code) {
         }
         if (id == IDS_DEL) { se_remove(); return; }
         if (id == IDS_MAP || id == IDS_SFX) { se_file(id == IDS_SFX); return; }
-        if (id == IDS_TOUR && m) { m->tour = !m->tour; se_rebuild(); return; }
+        if (id == IDS_TOUR && (m || se_cur < stages::OLD)) { if (m) m->tour = !m->tour; else se_otour[se_cur] = !se_otour[se_cur]; se_rebuild(); return; }
         if (id >= IDS_FX0 && id <= IDS_FX2) { se_fx_toggle(id - IDS_FX0); return; }
     }
     if (code == EN_CHANGE && id == IDS_ID && m) {
@@ -607,7 +639,7 @@ static void se_command(int id, int code) {
 
 // ---------------- load, validate, export ----------------
 static bool se_has_content() { if (!se_maps.empty()) return true; for (auto& o : se_ofx) for (int k = 0; k < 3; k++) if (o.on[k] >= 0) return true; for (auto& o : se_oname) for (auto& x : o) if (!x.empty()) return true; return false; }
-static void se_reset() { for (auto& o : se_ofx) o = SeFx(); se_fx_cache.clear(); se_maps.clear(); for (auto& o : se_oname) for (auto& x : o) x.clear(); se_cur = 0; se_scroll = 0; se_bitmaps_drop(); }
+static void se_reset() { for (auto& o : se_ofx) o = SeFx(); se_fx_cache.clear(); se_maps.clear(); for (auto& o : se_oname) for (auto& x : o) x.clear(); for (bool& t : se_otour) t = false; se_cur = 0; se_scroll = 0; se_bitmaps_drop(); }
 // returns the mod's Packfile paths that belong to its maps (the Mod tab does not list them)
 static std::vector<std::string> se_load_mod(const std::string& root, const std::string& mod) {
     se_reset();
@@ -640,6 +672,7 @@ static std::vector<std::string> se_load_mod(const std::string& root, const std::
     }
     for (int i = 0; i < stages::OLD; i++) { std::string st = psp_orig_map_stem(i); if (!st.empty()) se_fx_load(pk + st, "Maps/" + st, se_ofx[i], taken); }
     for (int i = 0; i <= stages::OLD; i++) for (int l = 0; l < 2; l++) se_oname[i][l] = d.orig[i][l] == stages::default_name(i, l) ? "" : d.orig[i][l];
+    for (int i = 0; i < stages::OLD; i++) se_otour[i] = d.otour[i] > 0;
     se_cur = se_maps.empty() ? 0 : stages::OLD;
     return taken;
 }
@@ -663,9 +696,11 @@ static bool se_export(const ReAdd& add, int& files, std::wstring& err) {
         for (int l = 0; l < 2; l++) if (!m.tname[l].empty()) t += std::string("name_") + RE_LANG_C[l] + " = " + m.tname[l] + "\n";
     }
     for (int i = 0; i <= stages::OLD; i++) {
-        if (se_oname[i][0].empty() && se_oname[i][1].empty()) continue;
+        bool tr = i < stages::OLD && se_otour[i];
+        if (se_oname[i][0].empty() && se_oname[i][1].empty() && !tr) continue;
         t += "\n[original]\nn = " + std::to_string(i + 1) + "\n";
         for (int l = 0; l < 2; l++) if (!se_oname[i][l].empty()) t += std::string("name_") + RE_LANG_C[l] + " = " + se_oname[i][l] + "\n";
+        if (tr) t += "tournament = 1\n";
     }
     if (!add("Stages/stages.txt", std::vector<uint8_t>(t.begin(), t.end()))) { err = L"Failed to write the mkpak"; return false; }
     files++;
@@ -707,8 +742,7 @@ static void se_register() {
 }
 static void se_controls() {   // called by the mod creator while it builds page 2
     se_register();
-    cm_ctl(L"BUTTON", L"+ New map", BS_OWNERDRAW | WS_TABSTOP, 16, 88, 110, 28, IDS_NEW);
-    cm_ctl(L"BUTTON", L"Remove", BS_OWNERDRAW | WS_TABSTOP, 132, 88, 96, 28, IDS_DEL);
+    theme_primary.insert(cm_ctl(L"BUTTON", L"+ New map", BS_OWNERDRAW | WS_TABSTOP, 16, 16, 120, 30, IDS_NEW, theme_f_bold));
     cm_ctl(L"STATIC", L"", SS_ENDELLIPSIS, 16, 130, 300, 24, IDS_TITLE, theme_f_bold);
     cm_ctl(L"STATIC", L"", 0, 16, 156, 300, 34, IDS_SUB);
     cm_ctl(L"STATIC", L"ID", 0, 16, 200, 80, 18, IDS_ID_L);
@@ -722,21 +756,22 @@ static void se_controls() {   // called by the mod creator while it builds page 
         cm_ctl(L"EDIT", L"", ES_AUTOHSCROLL | WS_TABSTOP, 48, 355 + 34 * l, 268, 24, IDS_NB0 + l);
     }
     static const wchar_t* FXN[3] = {L"Heat haze", L"Bubbles", L"Storm"};
-    for (int k = 0; k < 3; k++) cm_ctl(L"BUTTON", FXN[k], BS_OWNERDRAW | WS_TABSTOP, 16 + 102 * k, 424, 96, 28, IDS_FX0 + k);
+    for (int k = 0; k < 3; k++) theme_switch.insert(cm_ctl(L"BUTTON", L"", BS_OWNERDRAW | WS_TABSTOP, 16 + 102 * k, 424, 40, 26, IDS_FX0 + k));
+    (void)FXN;
     cm_ctl(L"STATIC", L"Files: click or drop, right click removes", 0, 16, 464, 300, 18, IDS_F_L);
-    cm_ctl(L"BUTTON", L"Map", BS_OWNERDRAW | WS_TABSTOP, 16, 486, 146, 28, IDS_MAP);
-    cm_ctl(L"BUTTON", L"SFX", BS_OWNERDRAW | WS_TABSTOP, 168, 486, 146, 28, IDS_SFX);
+    cm_ctl(L"BUTTON", L"Add", BS_OWNERDRAW | WS_TABSTOP, 16, 486, 76, 26, IDS_MAP);
+    cm_ctl(L"BUTTON", L"Add", BS_OWNERDRAW | WS_TABSTOP, 168, 486, 76, 26, IDS_SFX);
     cm_ctl(L"STATIC", L"SFX of", 0, 16, 528, 80, 18, IDS_SFX_L);
     HWND sc = cm_ctl(L"COMBOBOX", L"", CBS_DROPDOWNLIST | WS_TABSTOP | WS_VSCROLL, 100, 524, 216, 320, IDS_SFXOF);
     theme_control(sc, L"DarkMode_CFD");
     for (int k = 0; k < stages::OLD; k++) SendMessageW(sc, CB_ADDSTRING, 0, (LPARAM)mw_w(stages::NAMES[k]).c_str());
-    cm_ctl(L"BUTTON", L"Tournament ring", BS_OWNERDRAW | WS_TABSTOP, 16, 560, 146, 28, IDS_TOUR);
+    theme_switch.insert(cm_ctl(L"BUTTON", L"", BS_OWNERDRAW | WS_TABSTOP, 16, 560, 40, 26, IDS_TOUR));
     cm_ctl(L"STATIC", L"", 0, 16, 598, 300, 36, IDS_INFO);
     se_grid = CreateWindowExW(0, L"TTTStageGrid", L"", WS_CHILD | WS_VISIBLE | WS_VSCROLL | WS_TABSTOP, E(332), E(130), E(612), E(470), cm, (HMENU)(INT_PTR)IDS_GRID, GetModuleHandle(nullptr), nullptr);
     theme_control(se_grid);
     cm_page[2].push_back(se_grid);
-    cm_ctl(L"STATIC", L"", SS_ENDELLIPSIS, 332, 608, 612, 22, IDS_SUM);
+    cm_ctl(L"STATIC", L"", SS_ENDELLIPSIS, 16, 662, 612, 18, IDS_SUM);
     se_renders_scan();
     se_reset();
 }
-static void se_close() { se_bitmaps_drop(); se_grid = nullptr; for (int id : {(int)IDS_MAP, (int)IDS_SFX, (int)IDS_TOUR, (int)IDS_FX0, (int)IDS_FX1, (int)IDS_FX2}) theme_primary.erase(GetDlgItem(cm, id)); }
+static void se_close() { se_bitmaps_drop(); se_grid = nullptr; for (int id : {(int)IDS_FX0, (int)IDS_FX1, (int)IDS_FX2, (int)IDS_TOUR}) theme_switch.erase(GetDlgItem(cm, id)); for (int id : {(int)IDS_MAP, (int)IDS_SFX, (int)IDS_TOUR, (int)IDS_FX0, (int)IDS_FX1, (int)IDS_FX2}) theme_primary.erase(GetDlgItem(cm, id)); }
