@@ -176,6 +176,7 @@ inline void read_file(const std::string& path, const std::string& mod, bool take
     int sec = 0, ln = 0;
     Char* cur = nullptr;
     Rename* ren = nullptr;
+    bool merge = false;   // [original N] already given by a higher-priority mod: only its empty character keys are filled
     std::vector<std::vector<int>> lay;
     std::string err;
     bool first = true;
@@ -189,16 +190,16 @@ inline void read_file(const std::string& path, const std::string& mod, bool take
         s = trim(s);
         if (s.empty()) continue;
         if (s[0] == '[') {
-            cur = nullptr; ren = nullptr;
+            cur = nullptr; ren = nullptr; merge = false;
             int n = -1;
             if (s == "[layout]") sec = 1;
             else if (s == "[forms]") sec = 4;
             else if (sscanf(s.c_str(), "[name %d]", &n) == 1 || sscanf(s.c_str(), "[original %d]", &n) == 1) {
                 sec = 3;
                 if (!vanilla(n)) { printf("roster: %s: [original %d] no es un personaje original\n", mod.c_str(), n); sec = 0; continue; }
-                bool taken = false;
-                for (auto& r : d.renames) taken = taken || r.sysid == n;
-                if (taken) { sec = 0; continue; }
+                Rename* had = nullptr;
+                for (auto& r : d.renames) if (r.sysid == n) had = &r;
+                if (had) { ren = had; merge = true; continue; }
                 d.renames.push_back(Rename());
                 ren = &d.renames.back();
                 ren->sysid = n; ren->mod = mod;
@@ -255,6 +256,20 @@ inline void read_file(const std::string& path, const std::string& mod, bool take
             size_t eq = s.find('=');
             if (eq == std::string::npos) continue;
             std::string k = trim(s.substr(0, eq)), v = trim(s.substr(eq + 1));
+            if (merge) {
+                std::string tk[4], fk[3][2];
+                std::vector<VsLine> vs;
+                if (!ref_key(k, v, tk, fk, vs)) continue;
+                for (int i = 0; i < 4; i++) if (ren->tf_key[i].empty() && !tk[i].empty()) ren->tf_key[i] = tk[i];
+                for (int i = 0; i < 3; i++) for (int j = 0; j < 2; j++) if (ren->fu_key[i][j].empty() && !fk[i][j].empty()) ren->fu_key[i][j] = fk[i][j];
+                for (auto& x : vs) {
+                    bool dup = false;
+                    for (auto& y : ren->vs) dup = dup || (y.victory == x.victory && low(y.rival) == low(x.rival));
+                    if (!dup) ren->vs.push_back(x);
+                }
+                printf("roster: %s: [original %d] tambien en %s, se suman sus claves de personajes (%s)\n", mod.c_str(), ren->sysid, ren->mod.c_str(), k.c_str());
+                continue;
+            }
             if (k == "name" || k == "name_en") { ren->name[0] = v; if (k == "name") ren->name[1] = ren->name[2] = v; }
             else if (k == "name_es") ren->name[1] = v;
             else if (k == "bt3_id") ren->newid = atoi(v.c_str());
