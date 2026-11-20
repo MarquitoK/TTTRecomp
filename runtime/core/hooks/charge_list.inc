@@ -622,6 +622,7 @@ static bool cl_partner_bar() {
 
 static bool cl_wrap(uint32_t dir, Ctx& c, void (*orig)(Ctx&)) {
     if (dir == 0x089E6604u) {                 // bar name: never in the original HUD (it would name the opponents of 0x45 bars)
+        if (!bh_on) return !nm_want();   // original bars: the game's own name over the opponents' floating bars
         if (hud_on && (nm_want() || net_online_on())) nm_draw(c, c.r[4]);
         return true;
     }

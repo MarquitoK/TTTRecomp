@@ -832,8 +832,8 @@ static void sz_cmd_draw(uint32_t o) {
     double now = std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
     static int lst = -2, logs = 0;
     static double t0 = 0;
-    if (st != lst) {
-        lst = st; t0 = now;
+    if (st != lst || hud_cmd_restart) {
+        lst = st; t0 = now; hud_cmd_restart = false;
         if (logs++ < 12) { printf("hud sz: orden del companero estado %d (puesto %d de %d:", st, rank, n); for (int i = 0; i < n; i++) printf(" %d", keys[i]); printf(")\n"); }
     }
     double e = now - t0;

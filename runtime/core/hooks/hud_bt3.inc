@@ -123,13 +123,17 @@ static bool hud_partner_cpu(const Ctx& c) {
     int n = t ? (int)psp_l32(t) : 0, me = rumble_local_slot(c), st = 0;
     if (n < 1 || n > 8) return true;
     uint32_t base = psp_l32(t + 4), mine = 0;
-    for (int i = 0; i < n; i++) if ((int)psp_l32(base + 0x1A90u * i + 0x2C) == me) mine = base + 0x1A90u * i;
+    for (int i = 0; i < n; i++) if ((int)psp_l32(base + 0x1A90u * i + 0x2C) == me && psp_l32(base + 0x1A90u * i + 0xC)) mine = base + 0x1A90u * i;   // empty slots also carry place 0
     if (mine) for (int i = 0; i < n; i++) {
         uint32_t e = base + 0x1A90u * i;
-        if (e != mine && psp_l32(e + 4) == psp_l32(mine + 4)) st = psp_l8(e + 0x1690) ? 1 : 2;
+        if (e != mine && (int32_t)psp_l32(e + 0x1A38) > 0 && psp_l32(e + 4) == psp_l32(mine + 4)) st = psp_l8(e + 0x1690) ? 1 : 2;   // an absent partner keeps its slot with max life 0
     }
     static int last = -1;
-    if (st != last) { last = st; printf("hud: orden del companero %s\n", st == 1 ? "visible (companero CPU)" : st == 2 ? "oculta (companero humano)" : "oculta (sin companero)"); }
+    if (st != last) {
+        last = st;
+        printf("hud: orden del companero %s\n", st == 1 ? "visible (companero CPU)" : st == 2 ? "oculta (companero humano)" : "oculta (sin companero)");
+        for (int i = 0; i < n; i++) { uint32_t e = base + 0x1A90u * i; printf("hud:   entrada %d: puesto %d equipo %d activo %d vida %d/%d cpu %d%s\n", i, (int)psp_l32(e + 0x2C), (int)psp_l32(e + 4), (int)psp_l32(e + 0xC), (int)psp_l32(e + 0x1A34), (int)psp_l32(e + 0x1A38), (int)psp_l8(e + 0x1690), e == mine ? " (J1)" : ""); }
+    }
     return st == 1;
 }
 
@@ -531,6 +535,7 @@ static void sub_depth(Ctx& c, void (*orig)(Ctx&)) {
 }
 
 // partner command box (BT3 bars): shown when the order changes (text instance state), held 2 s, faded in 0.5 s
+static bool hud_cmd_restart = false;   // the partner order shows again when the fight begins (Ready/Fight), not in the intros
 static void cmd_fade(uint32_t box, uint32_t txt) {
     static int on = -1;
     if (on < 0) { const char* e = getenv("TTT_CMD_FADE"); on = e && *e ? atoi(e) : 1; }
@@ -539,8 +544,8 @@ static void cmd_fade(uint32_t box, uint32_t txt) {
     static std::chrono::steady_clock::time_point t0;
     uint32_t key = psp_l32(psp_l32(txt) + 0x30);
     auto now = std::chrono::steady_clock::now();
-    if (key != last) {
-        last = key; t0 = now;
+    if (key != last || hud_cmd_restart) {
+        last = key; t0 = now; hud_cmd_restart = false;
         static int n = 0;
         if (n++ < 12) printf("hud: orden del companero cambia (estado %08X), se muestra\n", key);
     }
@@ -762,6 +767,13 @@ static bool hud_wrap(uint32_t dir, Ctx& c, void (*orig)(Ctx&)) {
     if (dir == 0x089EBAB8u) {                 // partner command box at the scale of P1's team
         uint32_t o = c.r[4];
         if (!hud_partner_cpu(c)) return true;
+        uint32_t pm = psp_l32(0x08A7D880u);
+        int ph = guest_ptr(pm) ? (int)psp_l32(pm) : -1;   // 0..2 intros, 3 Ready/Fight, 4 combat, 5 KO
+        static int lph = -1;
+        bool fight = ph >= 3 && ph <= 5;
+        if (fight && !(lph >= 3 && lph <= 5)) hud_cmd_restart = true;
+        lph = ph;
+        if (!fight) return true;
         if (bh_on && bh_sz) { uint32_t ft = psp_l32(0x08A7DBC8u); int fn = ft ? (int)psp_l32(ft) : 0; if (fn >= 1 && fn <= 8) sz_cmd_draw(o); return true; }   // SZ bars: the port's name band with the order
         hud_scale(psp_l32(o + 0x74), hud_sx[0], hud_sy[0]);
         hud_scale(psp_l32(o + 0x78), hud_sx[0], hud_sy[0]);
