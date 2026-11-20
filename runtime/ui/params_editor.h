@@ -845,7 +845,7 @@ static void pe_view_create() {   // in the creator, where the cell grid is; show
     wc.hInstance = GetModuleHandle(nullptr); wc.hCursor = LoadCursor(nullptr, IDC_ARROW); wc.hbrBackground = theme_b_bg;
     wc.lpfnWndProc = pe_view_proc; wc.lpszClassName = L"TTTParamView";
     RegisterClassW(&wc);
-    pe_view = CreateWindowExW(0, L"TTTParamView", L"", WS_CHILD | WS_VSCROLL, E(412), E(196), E(PE_W + 20), E(476), cm, (HMENU)(INT_PTR)IDR_PVIEW, GetModuleHandle(nullptr), nullptr);
+    pe_view = CreateWindowExW(0, L"TTTParamView", L"", WS_CHILD | WS_VSCROLL, E(412), E(132), E(PE_W + 20), E(540), cm, (HMENU)(INT_PTR)IDR_PVIEW, GetModuleHandle(nullptr), nullptr);
     theme_control(pe_view);
     cm_page[1].push_back(pe_view);
 }

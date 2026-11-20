@@ -87,7 +87,7 @@ static bool re_dropped(const std::string& src) {
 static void re_drop_mod(const std::string& v) {
     for (size_t a = 4; a < v.size();) { size_t b = v.find('\n', a); std::string p = v.substr(a, b == std::string::npos ? std::string::npos : b - a); re_gone.insert(re_norm(p)); re_gone.insert(re_norm(p + ".pak")); a = b == std::string::npos ? v.size() : b + 1; }
 }
-static int re_page = 0, re_pick_k = 0, re_pick_l = 0;
+static int re_page = 0, re_spage = 0, re_pick_k = 0, re_pick_l = 0;   // re_spage: General or Labels in the Select screen page
 static const int RE_L_IMPORT = -20, RE_L_DEFAULT = -21, RE_L_NONE = -22;
 static int re_cur = -1, re_form = -1, re_pick_choice = -3;
 static bool re_layout_set = false, re_filling = false, re_ready = false, re_pick_open = false;
@@ -95,7 +95,7 @@ static std::string re_mod_src, re_mod_root;
 static void pe_panel(int s);
 static void pe_side_cmd(int id);
 static int re_view = 0;   // 0 Characters page, 1 Select screen page
-static const int RE_DX = 384, RE_DY = 40;   // the character panels, moved right of the character list
+static const int RE_DX = 868, RE_DY = -12;   // General and Labels: right column of the Select screen page
 static void re_view_apply();
 static void pe_reset();
 static bool pe_any();
@@ -724,7 +724,7 @@ static void re_action(int id) {
 #define EM_SETCUEBANNER 0x1501
 #endif
 static int re_page_of(int id) { return id >= IDR_SUB && id <= IDR_INFO ? 0 : id >= IDR_LT0 && id <= IDR_FT1 ? 1 : id >= IDR_PINFO && id < IDR_PS_END ? 2 : id == IDR_PCM ? 0 : -1; }
-static void re_show(int id, bool on) { HWND c = GetDlgItem(cm, id); int pg = re_page_of(id); if (c) ShowWindow(c, on && cm_tab == 1 && (pg < 0 || (pg == re_page && re_view == 0)) ? SW_SHOW : SW_HIDE); }
+static void re_show(int id, bool on) { HWND c = GetDlgItem(cm, id); int pg = re_page_of(id); if (c) ShowWindow(c, on && cm_tab == 1 && (pg < 0 || (pg == re_page && (pg == 2) == (re_view == 0))) ? SW_SHOW : SW_HIDE); }
 static void re_set_text(int id, const std::string& t) {
     HWND c = GetDlgItem(cm, id);
     wchar_t cur[1024] = L""; GetWindowTextW(c, cur, 1024);
@@ -799,9 +799,10 @@ static void re_panel() {
     re_lang_panel(s, nw || orig);
     {   // charge row after the voices: below the voice pack buttons when they are shown
         bool chg = (nw || orig) && re_chg_on();
-        int y = re_lang_shown ? 588 : 561;
+        int y = re_lang_shown ? 588 : 561, last = chg ? y : re_lang_shown ? 561 : 534;
         for (int k = 0; k < 2; k++) { re_show(IDR_F6 + k, chg); SetWindowPos(GetDlgItem(cm, IDR_F6 + k), nullptr, E(RE_DX + 16 + 152 * k), E(RE_DY + y), E(146), E(26), SWP_NOZORDER | SWP_NOACTIVATE); }
-        SetWindowPos(GetDlgItem(cm, IDR_INFO), nullptr, E(RE_DX + 16), E(RE_DY + (chg ? y + 30 : 591)), E(300), E(18), SWP_NOZORDER | SWP_NOACTIVATE);
+        SetWindowPos(GetDlgItem(cm, IDR_PCM), nullptr, E(RE_DX + 16), E(RE_DY + last + 36), E(146), E(26), SWP_NOZORDER | SWP_NOACTIVATE);
+        SetWindowPos(GetDlgItem(cm, IDR_INFO), nullptr, E(RE_DX + 16), E(RE_DY + last + 70), E(300), E(18), SWP_NOZORDER | SWP_NOACTIVATE);
     }
     if (nw || orig) re_tex1_sync(s);
     {   // gray: none, orange: made or dropped now, violet: already in the mod
@@ -818,7 +819,7 @@ static void re_panel() {
         re_mark(IDR_F5, o && !o->file[RF_VOICES].empty(), re_orig_exists(gk, RF_VOICES), o && re_is_mod(o->file[RF_VOICES]));
         re_mark(IDR_F6, o && !o->file[RF_AURA].empty(), false, o && re_is_mod(o->file[RF_AURA]));
         re_mark(IDR_F7, o && !o->file[RF_CHG1].empty(), false, o && re_is_mod(o->file[RF_CHG1]));
-        re_set_text(IDR_INFO, re_mod_src.empty() ? "Blue: in the game.  Orange: replaced or on." : "Blue: in the game.  Violet: in this mod.  Orange: replaced now.");
+        re_set_text(IDR_INFO, "");
     }
     for (int id : {IDR_SYS_L, IDR_SYS, IDR_N_L0, IDR_N_L1, IDR_N_L2, IDR_N0, IDR_N1, IDR_N2}) re_show(id, nw || orig);
     EnableWindow(GetDlgItem(cm, IDR_FORM), re_cur >= 0 && re_cur < (int)re_cells.size() - 1);
@@ -856,7 +857,6 @@ static void re_panel() {
         re_set_text(IDR_INFO, info);
     }
     for (int k = 0; k < 2; k++) re_mark(IDR_PG0 + k, re_page == k);
-    re_mark(IDR_PG2, re_page == 2);
     bool tx = re_text_names();   // names as text: the transformation is one text per language instead of the label images
     for (int id = IDR_LT0; id <= IDR_LHELP; id++) {
         bool form = id == IDR_LT1 || id == IDR_LT2 || (id >= IDR_LN0 + 3 && id < IDR_LN0 + 9) || (id >= IDR_LB0 + 3 && id < IDR_LB0 + 9);
@@ -1554,8 +1554,7 @@ static void re_command(int id, int code) {
     int s = re_selected();
     ReChar* c = s >= 0 ? re_find(s) : nullptr;
     if (code == BN_CLICKED) {
-        if (id == IDR_PG0 || id == IDR_PG1) { re_page = id - IDR_PG0; re_panel(); return; }
-        if (id == IDR_PG2) { re_page = 2; re_panel(); return; }
+        if (id == IDR_PG0 || id == IDR_PG1) { re_page = re_spage = id - IDR_PG0; re_panel(); return; }
         if ((id >= IDR_PS0 && id < IDR_PS_END) || id == IDR_PCPREV || id == IDR_PCNEXT || id == IDR_PUNDO) { pe_side_cmd(id); return; }
     }
     if (code == CBN_SELCHANGE && id == IDR_FTC && s >= 0) {   // the character takes that text (shared with every character that has it)

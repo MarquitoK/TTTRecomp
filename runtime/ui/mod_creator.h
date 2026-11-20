@@ -551,10 +551,8 @@ static void cm_command(int id) {
     }
     switch (id) {
         case IDC_TAB0: cm_select_tab(0); break;
-        case IDC_TAB1: case IDC_TAB3: re_view = id == IDC_TAB3; cm_select_tab(1); break;
+        case IDC_TAB1: case IDC_TAB3: re_view_set(id == IDC_TAB3); cm_select_tab(1); break;
         case IDC_TAB2: cm_select_tab(2); break;
-        case IDV_EDIT: re_view = 0; cm_select_tab(1); break;
-        case IDV_NEW: re_command(IDR_NEW, BN_CLICKED); break;
         case IDC_ADD: cm_pick_folder(); break;
         case IDC_REMOVE: { int k = (int)SendMessageW(cm_list, LB_GETCURSEL, 0, 0); if (k >= 0 && k < (int)cm_content.size()) { cm_content.erase(cm_content.begin() + k); cm_fill(); } break; }
         case IDC_PICK_IMG: cm_pick_image(); break;
@@ -583,7 +581,7 @@ static LRESULT CALLBACK cm_proc(HWND h, UINT m, WPARAM w, LPARAM l) {
     if (m == WM_CONTEXTMENU) { int id = GetDlgCtrlID((HWND)w); if (id == IDR_F0) re_file_clear(re_col); if (id == IDR_F4) re_file_clear(RF_SFX); if (id == IDR_F5) re_file_clear(RF_VOICES); if (id == IDR_F6) re_file_clear(RF_AURA); if (id == IDR_F7) re_file_clear(RF_CHG1); if (id == IDR_D0) re_dmg_clear(re_col); if (id >= IDR_LANG0 && id <= IDR_LANG3) re_lang_clear(id - IDR_LANG0); if (id == IDS_MAP || id == IDS_SFX) se_file_clear(id == IDS_SFX); return 0; }
     if (m == WM_CTLCOLORSTATIC) {
         int id = GetDlgCtrlID((HWND)l);
-        if (id == IDC_SUB || id == IDC_NOTICE || id == IDC_HINT || id == IDR_SUB || id == IDR_INFO || id == IDR_PINFO || id == IDR_SUM || id == IDR_FORMS_L || id == IDR_LHELP || id == IDR_FTN0 || id == IDR_FTN1 || (id >= IDR_LN0 && id < IDR_LN0 + 9) || id == IDS_SUB || id == IDS_INFO || id == IDV_HELP || id == IDS_SUM || id == IDS_IMG_L || id == IDS_F_L) {
+        if (id == IDC_SUB || id == IDC_NOTICE || id == IDC_HINT || id == IDR_SUB || id == IDR_INFO || id == IDR_PINFO || id == IDR_SUM || id == IDR_FORMS_L || id == IDR_LHELP || id == IDR_FTN0 || id == IDR_FTN1 || (id >= IDR_LN0 && id < IDR_LN0 + 9) || id == IDS_SUB || id == IDS_INFO || id == IDS_SUM || id == IDS_IMG_L || id == IDS_F_L) {
             SetBkMode((HDC)w, TRANSPARENT); SetBkColor((HDC)w, THEME_BG);
             SetTextColor((HDC)w, id == IDC_NOTICE ? THEME_ACCENT : THEME_TEXT2);
             return (LRESULT)theme_b_bg;
@@ -601,16 +599,19 @@ static LRESULT CALLBACK cm_proc(HWND h, UINT m, WPARAM w, LPARAM l) {
             if (se_sel()) theme_frame_e(dc, 268, 193, 216, 30);
             theme_frame_e(dc, 499, 129, 614, 472);
         } else if (re_view == 0) {
+            HPEN p = CreatePen(PS_SOLID, 1, THEME_BORDER); HGDIOBJ op = SelectObject(dc, p);
+            MoveToEx(dc, E(412), E(124), nullptr); LineTo(dc, E(1264), E(124));
+            SelectObject(dc, op); DeleteObject(p);
+        } else {
             int s = re_selected();
             bool nw = s >= 0 && re_find(s), orig = s >= 0 && !nw;
+            theme_frame_e(dc, 183, 63, 522, 594);
+            theme_frame_e(dc, 719, 85, 150, 572);
             if (nw && re_page == 0) theme_frame_e(dc, RE_DX + 100, RE_DY + 193, 216, 30);
             if ((nw || orig) && re_page == 0) for (int l = 0; l < 2; l++) theme_frame_e(dc, RE_DX + 100, RE_DY + 291 + 30 * l, 216, 30);
             HPEN p = CreatePen(PS_SOLID, 1, THEME_BORDER); HGDIOBJ op = SelectObject(dc, p);
-            MoveToEx(dc, E(412), E(186), nullptr); LineTo(dc, E(1264), E(186));
+            MoveToEx(dc, E(884), E(134), nullptr); LineTo(dc, E(1264), E(134));
             SelectObject(dc, op); DeleteObject(p);
-        } else {
-            theme_frame_e(dc, 183, 63, 522, 594);
-            theme_frame_e(dc, 719, 85, 150, 572);
         }
         EndPaint(h, &ps);
         return 0;
@@ -648,8 +649,8 @@ static void cm_open() {
         cm_dx = cm_dy = 0;
         cm_ctl(L"STATIC", L"Create mod", 0, 16, 16, 140, 26, IDC_TITLE, theme_f_title);
         cm_ctl(L"BUTTON", L"Mod", BS_OWNERDRAW | WS_TABSTOP, 8, 112, 152, 36, IDC_TAB0);
-        cm_ctl(L"BUTTON", L"Characters", BS_OWNERDRAW | WS_TABSTOP, 8, 152, 152, 36, IDC_TAB1);
-        cm_ctl(L"BUTTON", L"Select screen", BS_OWNERDRAW | WS_TABSTOP, 8, 192, 152, 36, IDC_TAB3);
+        cm_ctl(L"BUTTON", L"Characters", BS_OWNERDRAW | WS_TABSTOP, 8, 192, 152, 36, IDC_TAB1);
+        cm_ctl(L"BUTTON", L"Select screen", BS_OWNERDRAW | WS_TABSTOP, 8, 152, 152, 36, IDC_TAB3);
         cm_ctl(L"BUTTON", L"Maps", BS_OWNERDRAW | WS_TABSTOP, 8, 232, 152, 36, IDC_TAB2);
         cm_mk = 0;
         cm_dx = CM_RAIL;
@@ -681,28 +682,22 @@ static void cm_open() {
         cm_mk = 1;
         cm_dx = cm_dy = 0;
         // Select screen page: the grid, the cell actions and the forms of the cell
-        cm_ctl(L"BUTTON", L"+ New", BS_OWNERDRAW | WS_TABSTOP, 184, 16, 96, 30, IDR_NEW);
-        cm_ctl(L"BUTTON", L"Copy", BS_OWNERDRAW | WS_TABSTOP, 286, 16, 96, 30, IDR_COPY);
-        cm_ctl(L"BUTTON", L"Transformation", BS_OWNERDRAW | WS_TABSTOP, 388, 16, 130, 30, IDR_FORM);
-        cm_ctl(L"BUTTON", L"Remove", BS_OWNERDRAW | WS_TABSTOP, 524, 16, 96, 30, IDR_DEL);
-        cm_ctl(L"BUTTON", L"Original", BS_OWNERDRAW | WS_TABSTOP, 626, 16, 104, 30, IDR_RESET);
-        cm_ctl(L"STATIC", L"Drag a cell to move it. Drop a cell on another one to make it a transformation of that character.", 0, 884, 64, 380, 40, IDV_HELP);
-        theme_primary.insert(cm_ctl(L"BUTTON", L"Edit character", BS_OWNERDRAW | WS_TABSTOP, 884, 150, 160, 32, IDV_EDIT, theme_f_bold));
+        cm_ctl(L"BUTTON", L"+ New character", BS_OWNERDRAW | WS_TABSTOP, 184, 16, 140, 30, IDR_NEW);
+        cm_ctl(L"BUTTON", L"Copy", BS_OWNERDRAW | WS_TABSTOP, 330, 16, 96, 30, IDR_COPY);
+        cm_ctl(L"BUTTON", L"Transformation", BS_OWNERDRAW | WS_TABSTOP, 432, 16, 130, 30, IDR_FORM);
+        cm_ctl(L"BUTTON", L"General", BS_OWNERDRAW | WS_TABSTOP, 884, 96, 96, 34, IDR_PG0);
+        cm_ctl(L"BUTTON", L"Labels", BS_OWNERDRAW | WS_TABSTOP, 984, 96, 88, 34, IDR_PG1);
         // Characters page: list, header with the forms, tabs
         cm_ctl(L"EDIT", L"", ES_AUTOHSCROLL | WS_TABSTOP | WS_BORDER, 184, 16, 212, 28, IDV_SEARCH);
         SendMessageW(GetDlgItem(cm, IDV_SEARCH), EM_SETCUEBANNER, TRUE, (LPARAM)L"Search");
-        cm_ctl(L"BUTTON", L"+ New character", BS_OWNERDRAW | WS_TABSTOP, 184, CH - 48, 212, 30, IDV_NEW);
         rv_create(CH);
         cm_ctl(L"STATIC", L"", SS_ENDELLIPSIS, 0, 0, 0, 0, IDR_TITLE, theme_f_bold);
-        cm_ctl(L"BUTTON", L"General", BS_OWNERDRAW | WS_TABSTOP, 412, 148, 96, 34, IDR_PG0);
-        cm_ctl(L"BUTTON", L"Labels", BS_OWNERDRAW | WS_TABSTOP, 512, 148, 88, 34, IDR_PG1);
-        cm_ctl(L"BUTTON", L"Parameters", BS_OWNERDRAW | WS_TABSTOP, 604, 148, 116, 34, IDR_PG2);
-        cm_ctl(L"STATIC", L"", 0, 412, 200, 700, 52, IDR_PINFO);
-        cm_ctl(L"BUTTON", L"<", BS_OWNERDRAW | WS_TABSTOP, 1136, 196, 26, 28, IDR_PCPREV);
-        cm_ctl(L"STATIC", L"All colors", SS_CENTER | SS_CENTERIMAGE, 1164, 196, 72, 28, IDR_PCNAME, theme_f_bold);
-        cm_ctl(L"BUTTON", L">", BS_OWNERDRAW | WS_TABSTOP, 1238, 196, 26, 28, IDR_PCNEXT);
-        cm_ctl(L"BUTTON", L"Undo changes", BS_OWNERDRAW | WS_TABSTOP, 1136, 232, 128, 30, IDR_PUNDO);
-        for (int i = 0; i < 16; i++) cm_ctl(L"BUTTON", L"", BS_OWNERDRAW | WS_TABSTOP, 1136, 284 + 32 * i, 128, 28, IDR_PS0 + i);
+        cm_ctl(L"STATIC", L"", 0, 412, 136, 700, 52, IDR_PINFO);
+        cm_ctl(L"BUTTON", L"<", BS_OWNERDRAW | WS_TABSTOP, 1136, 132, 26, 28, IDR_PCPREV);
+        cm_ctl(L"STATIC", L"All colors", SS_CENTER | SS_CENTERIMAGE, 1164, 132, 72, 28, IDR_PCNAME, theme_f_bold);
+        cm_ctl(L"BUTTON", L">", BS_OWNERDRAW | WS_TABSTOP, 1238, 132, 26, 28, IDR_PCNEXT);
+        cm_ctl(L"BUTTON", L"Undo changes", BS_OWNERDRAW | WS_TABSTOP, 1136, 168, 128, 30, IDR_PUNDO);
+        for (int i = 0; i < 16; i++) cm_ctl(L"BUTTON", L"", BS_OWNERDRAW | WS_TABSTOP, 1136, 220 + 32 * i, 128, 28, IDR_PS0 + i);
         pe_view_create();
         cm_dx = RE_DX; cm_dy = RE_DY;
         cm_ctl(L"STATIC", L"", 0, 16, 156, 300, 34, IDR_SUB);
@@ -723,10 +718,10 @@ static void cm_open() {
         for (int j = 0; j < 4; j++) cm_ctl(L"TTTRosterImg", L"", 0, IB[j][0], IB[j][1], IB[j][2], IB[j][3], IDR_IMG0 + j);
         cm_ctl(L"STATIC", L"", 0, 16, 480, 1, 1, IDR_F_L);
         cm_ctl(L"BUTTON", L"<", BS_OWNERDRAW | WS_TABSTOP, 16, 480, 28, 26, IDR_CPREV);
-        cm_ctl(L"STATIC", L"Color 1", SS_CENTER | SS_CENTERIMAGE, 48, 480, 110, 26, IDR_CNAME, theme_f_bold);
-        cm_ctl(L"BUTTON", L">", BS_OWNERDRAW | WS_TABSTOP, 162, 480, 28, 26, IDR_CNEXT);
-        cm_ctl(L"BUTTON", L"Color files", BS_OWNERDRAW | WS_TABSTOP, 196, 480, 118, 26, IDR_F0);
-        cm_ctl(L"BUTTON", L"Pre CMAN", BS_OWNERDRAW | WS_TABSTOP, 322, 480, 104, 26, IDR_PCM);
+        cm_ctl(L"STATIC", L"Color 1", SS_CENTER | SS_CENTERIMAGE, 44, 480, 84, 26, IDR_CNAME, theme_f_bold);
+        cm_ctl(L"BUTTON", L">", BS_OWNERDRAW | WS_TABSTOP, 128, 480, 28, 26, IDR_CNEXT);
+        cm_ctl(L"BUTTON", L"Color files", BS_OWNERDRAW | WS_TABSTOP, 162, 480, 152, 26, IDR_F0);
+        cm_ctl(L"BUTTON", L"Pre CMAN", BS_OWNERDRAW | WS_TABSTOP, 16, 564, 146, 26, IDR_PCM);
         cm_ctl(L"STATIC", L"", 0, 16, 507, 1, 1, IDR_D_L);
         cm_ctl(L"BUTTON", L"Damaged (model)", BS_OWNERDRAW | WS_TABSTOP, 16, 507, 146, 26, IDR_D0);
         cm_ctl(L"BUTTON", L"Damaged (textures)", BS_OWNERDRAW | WS_TABSTOP, 168, 507, 146, 26, IDR_T0);
@@ -755,7 +750,7 @@ static void cm_open() {
         cm_dx = cm_dy = 0;
         re_grid_create(re_main, cm, 184, 64, 520, 592, IDR_GRID);
         cm_page[1].push_back(re_main.h);
-        cm_ctl(L"STATIC", L"", SS_ENDELLIPSIS, 884, 116, 380, 22, IDR_SUM);
+        cm_ctl(L"STATIC", L"", SS_ENDELLIPSIS, 884, 64, 380, 22, IDR_SUM);
         cm_ctl(L"STATIC", L"Transformations", SS_ENDELLIPSIS, 720, 64, 148, 18, IDR_FORMS_L);
         re_forms = ReGrid(); re_forms.cols = 1; re_forms.mode = 1;
         re_grid_create(re_forms, cm, 720, 86, 148, 570, IDR_FORMS);

@@ -1,14 +1,24 @@
 #pragma once
 // Characters page of the mod creator: list of characters (left), header with the render and the forms, tabs General / Labels / Parameters.
 // The cell grid lives in its own page (Select screen). Also draws the navigation rail and the tabs.
-enum { IDV_LIST = 3500, IDV_HEAD, IDV_SEARCH, IDV_NEW, IDV_EDIT, IDV_HELP };
+enum { IDV_LIST = 3800, IDV_HEAD, IDV_SEARCH };
 static HWND rv_list = nullptr, rv_head = nullptr;
 static std::vector<int> rv_rows;   // cell index, or -10 - group for a group caption
 static int rv_scroll = 0, rv_hot = -1, rv_head_hot = -1;
 static std::wstring rv_filter;
 static const COLORREF RV_RAIL = RGB(22, 25, 32), RV_SELBG = RGB(66, 48, 24), RV_HOVER = RGB(44, 50, 62);
 
-static bool rv_in_mod(int s) { return re_find(s) || re_orig.count(s) || re_ochar.count(s) || pe_count(s) > 0; }
+static bool rv_ochar_used(int s) {   // re_fchar fills re_ochar on select: only real content counts
+    auto it = re_ochar.find(s);
+    if (it == re_ochar.end()) return false;
+    const ReChar& o = it->second;
+    if (o.pcm) return true;
+    for (auto& f : o.file) if (!f.empty()) return true;
+    for (int j = 0; j < RE_COLS; j++) if (!o.dmg[j].empty() || !o.tex1[j].empty() || !o.bt3[j].empty()) return true;
+    for (auto& l : o.lang) if (!l.second.empty()) return true;
+    return false;
+}
+static bool rv_in_mod(int s) { return re_find(s) || re_orig.count(s) || rv_ochar_used(s) || re_lab_any(s) || re_fref.count(s) || pe_count(s) > 0; }
 static void rv_fill() {
     rv_rows.clear();
     int last = (int)re_cells.size() - 1;
@@ -66,7 +76,7 @@ static void rv_paint_list(HDC dc, RECT cr) {
         RECT t = {E(74), y + E(4), cr.right - E(8), y + E(24)};
         rv_text(dc, mw_w(re_label(s)), t, sel ? RGB(255, 210, 150) : THEME_TEXT, sel ? theme_f_bold : theme_f_normal);
         int nf = (int)re_cells[i].size() - 1;
-        std::wstring sub = re_find(s) ? L"New" : re_orig.count(s) ? L"Edited" : L"Original";
+        std::wstring sub = re_find(s) ? L"New" : rv_in_mod(s) ? L"Edited" : L"Original";
         if (nf) sub += L"  \x00B7  " + std::to_wstring(nf) + (nf == 1 ? L" form" : L" forms");
         RECT u = {E(74), y + E(22), cr.right - E(8), y + E(40)};
         rv_text(dc, sub, u, THEME_TEXT2, theme_f_normal);
@@ -205,24 +215,25 @@ static void rv_create(int H) {
         wc.lpfnWndProc = rv_head_proc; wc.lpszClassName = L"TTTCharHead"; RegisterClassW(&wc);
         reg = true;
     }
-    rv_list = CreateWindowExW(0, L"TTTCharList", L"", WS_CHILD | WS_VSCROLL | WS_TABSTOP, E(184), E(52), E(212), E(H - 108), cm, (HMENU)(INT_PTR)IDV_LIST, GetModuleHandle(nullptr), nullptr);
+    rv_list = CreateWindowExW(0, L"TTTCharList", L"", WS_CHILD | WS_VSCROLL | WS_TABSTOP, E(184), E(52), E(212), E(H - 68), cm, (HMENU)(INT_PTR)IDV_LIST, GetModuleHandle(nullptr), nullptr);
     theme_control(rv_list);
     rv_head = CreateWindowExW(0, L"TTTCharHead", L"", WS_CHILD, E(412), E(16), E(852), E(100), cm, (HMENU)(INT_PTR)IDV_HEAD, GetModuleHandle(nullptr), nullptr);
     cm_page[1].push_back(rv_list); cm_page[1].push_back(rv_head);
 }
 // which roster controls belong to which page: Characters (re_view 0) or Select screen (re_view 1)
 
+static void re_view_set(int v) { re_view = v; re_page = v ? re_spage : 2; }
 static void re_view_apply() {
     if (!cm || cm_tab != 1) return;
     bool ch = re_view == 0;
-    for (int id : std::initializer_list<int>{IDR_NEW, IDR_COPY, IDR_FORM, IDR_DEL, IDR_RESET, IDR_SUM, IDR_FORMS_L, IDV_EDIT, IDV_HELP}) ShowWindow(GetDlgItem(cm, id), ch ? SW_HIDE : SW_SHOW);
+    for (int id : std::initializer_list<int>{IDR_NEW, IDR_COPY, IDR_FORM, IDR_SUM, IDR_FORMS_L, IDR_PG0, IDR_PG1}) ShowWindow(GetDlgItem(cm, id), ch ? SW_HIDE : SW_SHOW);
     for (HWND hw : {re_main.h, re_forms.h}) if (hw) ShowWindow(hw, ch ? SW_HIDE : SW_SHOW);
-    for (int id : std::initializer_list<int>{IDV_SEARCH, IDV_NEW, IDR_PG0, IDR_PG1, IDR_PG2}) ShowWindow(GetDlgItem(cm, id), ch ? SW_SHOW : SW_HIDE);
+    for (int id : std::initializer_list<int>{IDV_SEARCH}) ShowWindow(GetDlgItem(cm, id), ch ? SW_SHOW : SW_HIDE);
     ShowWindow(rv_list, ch ? SW_SHOW : SW_HIDE);
     ShowWindow(rv_head, ch ? SW_SHOW : SW_HIDE);
     ShowWindow(GetDlgItem(cm, IDR_TITLE), SW_HIDE);
     if (ch) { rv_fill(); rv_reveal(); rv_list_scrollbar(); InvalidateRect(rv_list, nullptr, FALSE); InvalidateRect(rv_head, nullptr, FALSE); }
-    for (int id : std::initializer_list<int>{IDR_PG0, IDR_PG1, IDR_PG2}) InvalidateRect(GetDlgItem(cm, id), nullptr, FALSE);
+    for (int id : std::initializer_list<int>{IDR_PG0, IDR_PG1}) InvalidateRect(GetDlgItem(cm, id), nullptr, FALSE);
     InvalidateRect(cm, nullptr, TRUE);
 }
 
@@ -230,7 +241,7 @@ static void re_view_apply() {
 static int rv_nav_sel(int id) { return id == IDC_TAB0 ? cm_tab == 0 : id == IDC_TAB2 ? cm_tab == 2 : id == IDC_TAB1 ? cm_tab == 1 && re_view == 0 : cm_tab == 1 && re_view == 1; }
 static bool rv_draw(DRAWITEMSTRUCT* d) {
     int id = (int)d->CtlID;
-    bool nav = id == IDC_TAB0 || id == IDC_TAB1 || id == IDC_TAB2 || id == IDC_TAB3, tab = id == IDR_PG0 || id == IDR_PG1 || id == IDR_PG2;
+    bool nav = id == IDC_TAB0 || id == IDC_TAB1 || id == IDC_TAB2 || id == IDC_TAB3, tab = id == IDR_PG0 || id == IDR_PG1;
     if (!nav && !tab) return false;
     HDC dc = d->hDC; RECT r = d->rcItem;
     bool hot = d->hwndItem == theme_hot;
@@ -254,7 +265,7 @@ static bool rv_draw(DRAWITEMSTRUCT* d) {
         return true;
     }
     FillRect(dc, &r, theme_b_bg);
-    bool on = re_page == id - IDR_PG0 || (id == IDR_PG2 && re_page == 2);
+    bool on = re_page == id - IDR_PG0;
     wchar_t t[64] = L""; GetWindowTextW(d->hwndItem, t, 64);
     rv_text(dc, t, r, on ? THEME_TEXT : hot ? THEME_TEXT : THEME_TEXT2, on ? theme_f_bold : theme_f_normal, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
     if (on) rv_round(dc, r.left + E(10), r.bottom - E(3), r.right - r.left - E(20), E(3), E(3), THEME_ACCENT);
