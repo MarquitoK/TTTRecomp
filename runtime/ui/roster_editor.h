@@ -21,7 +21,7 @@ bool psp_original_exists(int k, int kind);
 enum { IDR_NEW = 3200, IDR_COPY, IDR_FORM, IDR_DEL, IDR_MOD_L, IDR_MOD, IDR_RESET, IDR_TITLE, IDR_SUB, IDR_ID_L, IDR_ID, IDR_SYS_L, IDR_SYS,
        IDR_BASE_L, IDR_BASE, IDR_N_L0, IDR_N_L1, IDR_N_L2, IDR_N0, IDR_N1, IDR_N2, IDR_IMG_L, IDR_IMG0, IDR_IMG1, IDR_IMG2, IDR_IMG3,
        IDR_F_L, IDR_F0, IDR_F1, IDR_F2, IDR_F3, IDR_F4, IDR_F5, IDR_F6, IDR_F7, IDR_D_L, IDR_D0, IDR_D1, IDR_D2, IDR_D3, IDR_T0, IDR_T1, IDR_T2, IDR_T3, IDR_CPREV, IDR_CNAME, IDR_CNEXT, IDR_LANG0, IDR_LANG1, IDR_LANG2, IDR_LANG3, IDR_INFO, IDR_GRID, IDR_FORMS_L, IDR_FORMS, IDR_SUM,
-       IDR_PG0, IDR_PG1, IDR_LT0, IDR_LT1, IDR_LT2, IDR_LN0, IDR_LB0 = IDR_LN0 + 9, IDR_LHELP = IDR_LB0 + 9, IDR_FTL, IDR_FTC, IDR_FTN0, IDR_FTN1, IDR_FT0, IDR_FT1, IDR_PCM, IDR_LAST };   // label boxes: kind * 3 + lang (name, form right, form left; en, es)
+       IDR_PG0, IDR_PG1, IDR_LT0, IDR_LT1, IDR_LT2, IDR_LN0, IDR_LB0 = IDR_LN0 + 9, IDR_LHELP = IDR_LB0 + 9, IDR_FTL, IDR_FTC, IDR_FTN0, IDR_FTN1, IDR_FT0, IDR_FT1, IDR_PCM, IDR_PG2, IDR_PINFO, IDR_PCPREV, IDR_PCNAME, IDR_PCNEXT, IDR_PUNDO, IDR_PVIEW, IDR_PS0, IDR_PS_END = IDR_PS0 + 16, IDR_LAST };   // label boxes: kind * 3 + lang (name, form right, form left; en, es)
 
 struct ReChar { bool pcm = false; int sysid = -1, donor = 3; std::string id, name[3], img[4], file[14], bt3[10], dmg[10], tex1[10]; std::map<std::string, std::string> lang; };   // tex1: level 1 damage textures per colour ("on" = made on export, "mod:" = on disk)   // dmg: damaged costume per colour ("ttt:", "bt3:" or "dir:")   // file: "ttt:" pak or "dir:" folder; bt3: BT3 paks over a folder (\n)
 struct ReOrig { std::string name[3]; int newid = -1; };   // an original character: own names, own BT3 id
@@ -92,6 +92,13 @@ static const int RE_L_IMPORT = -20, RE_L_DEFAULT = -21, RE_L_NONE = -22;
 static int re_cur = -1, re_form = -1, re_pick_choice = -3;
 static bool re_layout_set = false, re_filling = false, re_ready = false, re_pick_open = false;
 static std::string re_mod_src, re_mod_root;
+static void pe_panel(int s);
+static void pe_side_cmd(int id);
+static int re_view = 0;   // 0 Characters page, 1 Select screen page
+static const int RE_DX = 384, RE_DY = 40;   // the character panels, moved right of the character list
+static void re_view_apply();
+static void pe_reset();
+static bool pe_any();
 static HWND re_pick_w = nullptr;
 static struct { ReGrid* src = nullptr; int idx = -1; bool on = false; POINT p0{}; ReGrid* tgt = nullptr; } re_drag;
 
@@ -326,7 +333,7 @@ static bool re_has_content() {
         for (int j = 0; j < RE_COLS; j++) own = own || !o.second.dmg[j].empty() || !o.second.tex1[j].empty();
         for (auto& l : o.second.lang) own = own || !l.second.empty();
     }
-    return !re_chars.empty() || !re_orig.empty() || re_layout_set || lab || own;
+    return !re_chars.empty() || !re_orig.empty() || re_layout_set || lab || own || pe_any();
 }
 static std::string re_form_keys(int s) { auto f = re_fref.find(s); return f == re_fref.end() ? "" : "form = " + (f->second < 0 ? std::string("none") : std::to_string(f->second)) + "\n"; }
 static int re_form_eff(int s, int depth = 0) {   // the text id a character shows: given, an original's own row, a transformation's base's
@@ -589,6 +596,7 @@ static void re_rebuild() {
     if (re_cur >= 0) SetWindowTextW(GetDlgItem(cm, IDR_FORMS_L), (L"Transformations of " + mw_w(re_label(re_cells[re_cur][0]))).c_str());
     else SetWindowTextW(GetDlgItem(cm, IDR_FORMS_L), L"Transformations");
     re_panel();
+    re_view_apply();
 }
 static void re_select(ReGrid& g, int i) {
     if (&g == &re_main) { re_cur = i; re_form = -1; }
@@ -715,8 +723,8 @@ static void re_action(int id) {
 #ifndef EM_SETCUEBANNER
 #define EM_SETCUEBANNER 0x1501
 #endif
-static int re_page_of(int id) { return id >= IDR_SUB && id <= IDR_INFO ? 0 : id >= IDR_LT0 && id <= IDR_FT1 ? 1 : -1; }
-static void re_show(int id, bool on) { HWND c = GetDlgItem(cm, id); int pg = re_page_of(id); if (c) ShowWindow(c, on && cm_tab == 1 && (pg < 0 || pg == re_page) ? SW_SHOW : SW_HIDE); }
+static int re_page_of(int id) { return id >= IDR_SUB && id <= IDR_INFO ? 0 : id >= IDR_LT0 && id <= IDR_FT1 ? 1 : id >= IDR_PINFO && id < IDR_PS_END ? 2 : id == IDR_PCM ? 0 : -1; }
+static void re_show(int id, bool on) { HWND c = GetDlgItem(cm, id); int pg = re_page_of(id); if (c) ShowWindow(c, on && cm_tab == 1 && (pg < 0 || (pg == re_page && re_view == 0)) ? SW_SHOW : SW_HIDE); }
 static void re_set_text(int id, const std::string& t) {
     HWND c = GetDlgItem(cm, id);
     wchar_t cur[1024] = L""; GetWindowTextW(c, cur, 1024);
@@ -780,6 +788,7 @@ static void re_panel() {
     bool any = s >= -1, nw = c != nullptr, orig = s >= 0 && !c;
     bool base = nw && (c->file[RF_SFX].empty() || c->file[RF_VOICES].empty());
     re_show(IDR_TITLE, true); re_show(IDR_SUB, any);
+    pe_panel(any ? s : -2);
     re_show(IDR_IMG2, false);
     for (int id : {IDR_ID_L, IDR_ID, IDR_IMG_L, IDR_IMG0, IDR_IMG1, IDR_IMG3}) re_show(id, nw);
     for (int id : {IDR_F_L, IDR_F0, IDR_F4, IDR_F5, IDR_INFO, IDR_CPREV, IDR_CNEXT, IDR_CNAME, IDR_D0, IDR_T0, IDR_PCM}) re_show(id, nw || orig);
@@ -791,8 +800,8 @@ static void re_panel() {
     {   // charge row after the voices: below the voice pack buttons when they are shown
         bool chg = (nw || orig) && re_chg_on();
         int y = re_lang_shown ? 588 : 561;
-        for (int k = 0; k < 2; k++) { re_show(IDR_F6 + k, chg); SetWindowPos(GetDlgItem(cm, IDR_F6 + k), nullptr, E(16 + 152 * k), E(y), E(146), E(26), SWP_NOZORDER | SWP_NOACTIVATE); }
-        SetWindowPos(GetDlgItem(cm, IDR_INFO), nullptr, E(16), E(chg ? y + 30 : 591), E(300), E(18), SWP_NOZORDER | SWP_NOACTIVATE);
+        for (int k = 0; k < 2; k++) { re_show(IDR_F6 + k, chg); SetWindowPos(GetDlgItem(cm, IDR_F6 + k), nullptr, E(RE_DX + 16 + 152 * k), E(RE_DY + y), E(146), E(26), SWP_NOZORDER | SWP_NOACTIVATE); }
+        SetWindowPos(GetDlgItem(cm, IDR_INFO), nullptr, E(RE_DX + 16), E(RE_DY + (chg ? y + 30 : 591)), E(300), E(18), SWP_NOZORDER | SWP_NOACTIVATE);
     }
     if (nw || orig) re_tex1_sync(s);
     {   // gray: none, orange: made or dropped now, violet: already in the mod
@@ -847,6 +856,7 @@ static void re_panel() {
         re_set_text(IDR_INFO, info);
     }
     for (int k = 0; k < 2; k++) re_mark(IDR_PG0 + k, re_page == k);
+    re_mark(IDR_PG2, re_page == 2);
     bool tx = re_text_names();   // names as text: the transformation is one text per language instead of the label images
     for (int id = IDR_LT0; id <= IDR_LHELP; id++) {
         bool form = id == IDR_LT1 || id == IDR_LT2 || (id >= IDR_LN0 + 3 && id < IDR_LN0 + 9) || (id >= IDR_LB0 + 3 && id < IDR_LB0 + 9);
@@ -1093,7 +1103,7 @@ static void re_lang_panel(int s, bool on) {
         re_show(IDR_LANG0 + k, on && k < n);
         if (k >= n) continue;
         HWND b = GetDlgItem(cm, IDR_LANG0 + k);
-        SetWindowPos(b, nullptr, E(16 + (w + 4) * k), E(561), E(w), E(26), SWP_NOZORDER | SWP_NOACTIVATE);
+        SetWindowPos(b, nullptr, E(RE_DX + 16 + (w + 4) * k), E(RE_DY + 561), E(w), E(26), SWP_NOZORDER | SWP_NOACTIVATE);
         std::wstring t = (w >= 90 ? L"Voices " : L"") + mw_w(re_pk_codes[k]);
         wchar_t cur[64] = L""; GetWindowTextW(b, cur, 64);
         if (t != cur) SetWindowTextW(b, t.c_str());
@@ -1545,6 +1555,8 @@ static void re_command(int id, int code) {
     ReChar* c = s >= 0 ? re_find(s) : nullptr;
     if (code == BN_CLICKED) {
         if (id == IDR_PG0 || id == IDR_PG1) { re_page = id - IDR_PG0; re_panel(); return; }
+        if (id == IDR_PG2) { re_page = 2; re_panel(); return; }
+        if ((id >= IDR_PS0 && id < IDR_PS_END) || id == IDR_PCPREV || id == IDR_PCNEXT || id == IDR_PUNDO) { pe_side_cmd(id); return; }
     }
     if (code == CBN_SELCHANGE && id == IDR_FTC && s >= 0) {   // the character takes that text (shared with every character that has it)
         HWND cb = GetDlgItem(cm, IDR_FTC);
@@ -1648,6 +1660,7 @@ static void re_command(int id, int code) {
 // ---------------- load (an installed mod) ----------------
 static void re_reset_all() {
     re_chars.clear(); re_orig.clear(); re_lab.clear(); re_ftab.clear(); re_fref.clear(); re_ochar.clear(); re_gone.clear(); re_kept.clear(); re_ochar_load.clear(); re_tex1_new.clear(); re_layout_set = false; re_mod_src.clear();
+    pe_reset();
     re_packs();
     re_bitmaps_drop(-100);
     re_default_cells();
@@ -1926,6 +1939,7 @@ static void re_sync_gone() {
         for (auto& l : o.second.lang) keep(l.second);
     }
 }
+static bool pe_export(const ReAdd& add, int& files, std::wstring& err);
 static bool re_export(const ReAdd& add, int& files, std::wstring& err) {
     if (!re_validate(err)) return false;
     re_sync_gone();
@@ -1971,6 +1985,7 @@ static bool re_export(const ReAdd& add, int& files, std::wstring& err) {
         if (!add("Roster/roster.txt", std::vector<uint8_t>(t.begin(), t.end()))) { err = L"Failed to write the mkpak"; return false; }
         files++;
     }
+    if (!pe_export(add, files, err)) return false;   // before the colors: the edited parameter files win over the same paths in a color folder
     for (auto& x : re_lab) {   // label images (a new character's all-languages name travels as its Name image)
         ReChar* c = re_find(x.first);
         std::string dir = "Roster/" + (c ? c->id : std::to_string(x.first)) + "/";
@@ -2089,3 +2104,5 @@ static void re_fill_mods(const std::string& root) {
     for (auto& m : mods_list(root)) SendMessageW(b, CB_ADDSTRING, 0, (LPARAM)mw_w(m.id).c_str());
     SendMessageW(b, CB_SETCURSEL, 0, 0);
 }
+#include "ui/params_editor.h"
+#include "ui/roster_view.h"

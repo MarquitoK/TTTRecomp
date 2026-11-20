@@ -1,0 +1,639 @@
+# Fields of the character parameter files shown in the Params tab of the mod creator (offsets per game; - = not in that game)
+# key | type | bt3 | ttt | section (- = Advanced only) | group | label | options
+
+[file 17]
+name = 017_common_param.dat
+title = Common
+step = 0x0 0x0
+items = 
+weight | list | 0x2 | 0x2 | Character | Body | Weight | list:Little=0,Small=1,Normal=2,Big=3,Giant=4
+aura | list | 0x3 | 0x3 | Character | Body | Aura color | list:White=0,Violet=1,Yellow=2,Red=3,Green=4,Blue=5,Pink=6,Dark Blue=7,Super Saiyan=8,Super Saiyan 3=9,Super Saiyan 4=10
+evil | u8 | 0xC7 | 0xD1 | Character | Body | Evil level (0 good, 255 evil) | 
+coll_x | f32 | 0x4 | 0x4 | Character | Body | Collision X | 
+coll_y | f32 | 0x8 | 0x8 | Character | Body | Collision Y | 
+coll_z | f32 | 0xC | 0xC | Character | Body | Collision Z | 
+race1 | bits | 0x0 | 0x0 | Character | Race and forms | Race and forms | bits:Saiyan base form,Super Saiyan,Super Saiyan 2,Super Saiyan 3,Super Saiyan 4,Legendary Super Saiyan,Super Saiyan grade 2,Android
+race2 | bits | 0x1 | 0x1 | Character | Race and forms | Race and forms 2 | bits:Majin,Great Ape,*,*,*,*,*,*
+abil1 | bits | 0x10 | 0x18 | Character | Abilities | Abilities 1 | bits:Has tail,Can absorb energy blasts,Armor,Weak,Aura off,Robot,Sword effect (EQUIPMENT01),Sword effect (EQUIPMENT02)
+abil2 | bits | 0x11 | 0x19 | Character | Abilities | Abilities 2 | bits:Continuous energy blast barrage,Throw to ground,Stop throw to ground on water,Giant type,Can't fly,*,Cancel special throws,Metallic SFX
+abil3 | bits | 0x12 | 0x1A | Character | Abilities | Abilities 3 | bits:Disable look when tired,Unmodified dash animation,Saiyan transformation SFX,Throw animation modifier,Air combo teleport SFX,Enable halo by Z item,*,*
+abil4 | bits | 0x13 | 0x1B | Character | Abilities | Abilities 4 | bits:Solar Flare immunity (1),Solar Flare immunity (1 D),Solar Flare immunity (2),Solar Flare immunity (2 D),Solar Flare immunity (3),Solar Flare immunity (3 D),Solar Flare immunity (4),Solar Flare immunity (4 D)
+search1 | list | 0x58 | 0x60 | Character | Search | Search type (Color 1) | list:Z Search (?)=0,Z Search (?)=1,Scouter Search (Slow?)=2,Scouter Search (Normal?)=3,Scouter Search (Fast?)=4,Z Search (Android?)=5,Scouter? Search (Android?)=6,Damaged Scouter Z Search (?) (Slow?)=7,Damaged Scouter Z Search (?) (Fast?)=8,Scouter? Search (?)=9
+search2 | list | 0x59 | 0x61 | Character | Search | Search type (Color 2) | list:Z Search (?)=0,Z Search (?)=1,Scouter Search (Slow?)=2,Scouter Search (Normal?)=3,Scouter Search (Fast?)=4,Z Search (Android?)=5,Scouter? Search (Android?)=6,Damaged Scouter Z Search (?) (Slow?)=7,Damaged Scouter Z Search (?) (Fast?)=8,Scouter? Search (?)=9
+search3 | list | 0x5A | 0x62 | Character | Search | Search type (Color 3) | list:Z Search (?)=0,Z Search (?)=1,Scouter Search (Slow?)=2,Scouter Search (Normal?)=3,Scouter Search (Fast?)=4,Z Search (Android?)=5,Scouter? Search (Android?)=6,Damaged Scouter Z Search (?) (Slow?)=7,Damaged Scouter Z Search (?) (Fast?)=8,Scouter? Search (?)=9
+search4 | list | 0x5B | 0x63 | Character | Search | Search type (Color 4) | list:Z Search (?)=0,Z Search (?)=1,Scouter Search (Slow?)=2,Scouter Search (Normal?)=3,Scouter Search (Fast?)=4,Z Search (Android?)=5,Scouter? Search (Android?)=6,Damaged Scouter Z Search (?) (Slow?)=7,Damaged Scouter Z Search (?) (Fast?)=8,Scouter? Search (?)=9
+ki_auto | list32 | 0x28 | 0x30 | Ki and balance | Ki | Auto regenerated ki bars | list:None=0,1 bar=20000,2 bars=40000,3 bars=60000,4 bars=80000,5 bars=100000
+ki_crush | list32 | 0x2C | 0x34 | Ki and balance | Ki | Ki bars recovered at guard crush | list:None=0,1 bar=20000,2 bars=40000,3 bars=60000,4 bars=80000,5 bars=100000
+ki_charge | list32 | 0x30 | 0x38 | Ki and balance | Ki | Ki charge speed | list:Doesn't Charge Ki=0,Slow Charge=12528,Normal Charge=20000,Faster Charge=100000,Fast Charge=65512,Instant Charge=-1
+ki_charge_w | list32 | 0x34 | 0x3C | Ki and balance | Ki | Ki charge speed (water) | list:Doesn't Charge Ki=0,Slow Charge=12528,Normal Charge=20000,Faster Charge=100000,Fast Charge=65512,Instant Charge=-1
+ki_regen | s32 | 0x38 | 0x40 | Ki and balance | Ki | Ki regeneration speed | 
+ki_regen_c | s32 | 0x3C | 0x44 | Ki and balance | Ki | Ki regeneration speed at guard crush | 
+max_blasts | s32 | 0x40 | 0x48 | Ki and balance | Ki | Max blast units (unused) | 
+blast_regen | list32 | 0x44 | 0x4C | Ki and balance | Ki | Blast gauge regeneration speed | list:Doesn't Regenerate=0,Slow Regeneration=4336,Normal Regeneration=4624,Faster Regeneration=5152,Fast Regeneration=100000,Instant Regeneration=-1
+ki_recov | s32 | 0x48 | 0x50 | Ki and balance | Ki | Ki consumption at quick recovery | 
+ki_counter | s32 | 0x4C | 0x54 | Ki and balance | Ki | Ki consumption speed at counter | 
+bal_50 | f32 | 0x50 | 0x58 | Ki and balance | Balance | MAX ki charge speed | 
+bal_54 | f32 | 0x54 | 0x5C | Ki and balance | Balance | Max power mode duration | 
+bal_60 | f32 | 0x60 | 0x68 | Ki and balance | Balance | Knockback time at smash attack | 
+bal_64 | f32 | 0x64 | 0x6C | Ki and balance | Balance | Switch gauge regeneration speed | 
+bal_68 | f32 | 0x68 | 0x70 | Ki and balance | Balance | Side step momentum | 
+bal_6c | f32 | 0x6C | 0x74 | Ki and balance | Balance | Back step momentum | 
+bal_74 | f32 | 0x74 | 0x7C | Ki and balance | Balance | Base momentum | 
+bal_78 | f32 | 0x78 | 0x80 | Ki and balance | Balance | Momentum growth percentage | 
+bal_7c | f32 | 0x7C | 0x84 | Ki and balance | Balance | Damage taken | 
+blasts | u8 | 0x80 | 0x88 | Combos | Energy blasts | Energy blasts | 
+blasts_inf | check | 0x81 | 0x89 | Combos | Energy blasts | Infinite energy blasts | check:2
+b82 | u8 | 0x82 | 0x8A | - | Energy blasts | * (0x82) | 
+blasts_inf2 | check | 0x83 | 0x8B | Combos | Energy blasts | Infinite charged energy blasts | check:2
+homings | s16 | 0x70 | 0x78 | Combos | Energy blasts | Dragon homings | 
+vanish | s16 | 0x72 | 0x7A | Combos | Energy blasts | Vanishing attacks | 
+combo_84 | list | 0x84 | 0x8C | Combos | Finishers | Combo 1 | list:Heavy Finish=0,Kiai Cannon=1,Blaster Wave=2,Flying Kick=3,Energy Wave=4,Rolling Hammer=5
+combo_85 | list | 0x85 | 0x8D | Combos | Finishers | Combo 2 | list:Heavy Finish=0,Kiai Cannon=1,Blaster Wave=2,Flying Kick=3,Energy Wave=4,Rolling Hammer=5
+combo_86 | list | 0x86 | 0x8E | Combos | Finishers | Combo 3 | list:Heavy Finish=0,Kiai Cannon=1,Blaster Wave=2,Flying Kick=3,Energy Wave=4,Rolling Hammer=5
+combo_87 | list | 0x87 | 0x8F | Combos | Finishers | Combo 4 | list:Heavy Finish=0,Kiai Cannon=1,Blaster Wave=2,Flying Kick=3,Energy Wave=4,Rolling Hammer=5
+combo_88 | list | 0x88 | 0x91 | Combos | Finishers | Body strike | list:Strike=0,Heavy Finish=1,Kiai Cannon=2,Blaster Wave=3,Flying Kick=4,Energy Wave=5,Rolling Hammer=6
+combo_8a | list | 0x8A | 0x93 | Combos | Finishers | Step-in strike | list:Heavy Finish=0,Sway Heavy Finish=1,Kiai Cannon=2,Sway Kiai Cannon=3,Blaster Wave=4,Sway Blaster Wave=5,Flying Kick=6,Sway Flying Kick=7,Energy Wave=8,Sway Energy Wave=9,Rolling Hammer=10,Sway Rolling Hammer=11
+combo_8b | list | 0x8B | 0x94 | Combos | Finishers | Sway lift strike | list:Disabled=0,Enabled=1
+combo_8c | list | 0x8C | 0x95 | Combos | Finishers | Sway ground slash | list:Disabled=0,Enabled=1
+combo_8d | list | 0x8D | 0x96 | Combos | Finishers | Rush-in strike | list:Heavy Finish=0,Sway Heavy Finish=1,Kiai Cannon=2,Sway Kiai Cannon=3,Blaster Wave=4,Sway Blaster Wave=5,Flying Kick=6,Sway Flying Kick=7,Energy Wave=8,Sway Energy Wave=9,Rolling Hammer=10,Sway Rolling Hammer=11
+combo_8e | list | 0x8E | 0x97 | Combos | Finishers | Stun move | list:Heavy Finish=0,Sway Heavy Finish=1,Kiai Cannon=2,Sway Kiai Cannon=3,Blaster Wave=4,Sway Blaster Wave=5,Flying Kick=6,Sway Flying Kick=7,Energy Wave=8,Sway Energy Wave=9,Rolling Hammer=10,Sway Rolling Hammer=11
+combo_89 | list | 0x89 | 0x92 | Combos | Finishers | Sway step-in | list:Disabled=0,Enabled=5
+blast_combo1 | list | 0x8F | 0x98 | Combos | Blast combos | Vanishing attack blast combo | list:1st Super Attack=0,2nd Super Attack=1,1st Super Attack=2,1st Super Attack (Instant)=3,2nd Super Attack (Instant)=4,1st Super Attack (Instant)=5
+blast_combo2 | list | 0x90 | 0x99 | Combos | Blast combos | Ground slash blast combo | list:1st Super Attack=0,2nd Super Attack=1,1st Super Attack=2,1st Super Attack (Instant)=3,2nd Super Attack (Instant)=4,1st Super Attack (Instant)=5
+blast_combo3 | list | 0x91 | 0x9A | Combos | Blast combos | Heavy finish blast combo | list:1st Super Attack=0,2nd Super Attack=1,1st Super Attack=2,1st Super Attack (Instant)=3,2nd Super Attack (Instant)=4,1st Super Attack (Instant)=5
+blast_combo4 | list | 0x92 | 0x9B | Combos | Blast combos | Blaster wave blast combo | list:1st Super Attack=0,2nd Super Attack=1,1st Super Attack=2,1st Super Attack (Instant)=3,2nd Super Attack (Instant)=4,1st Super Attack (Instant)=5
+blast_combo5 | list | 0x93 | 0x9C | Combos | Blast combos | Rolling hammer blast combo | list:1st Super Attack=0,2nd Super Attack=1,1st Super Attack=2,1st Super Attack (Instant)=3,2nd Super Attack (Instant)=4,1st Super Attack (Instant)=5
+blast_combo6 | list | 0x94 | 0x9D | Combos | Blast combos | Power press blast combo | list:1st Super Attack=0,2nd Super Attack=1,1st Super Attack=2,1st Super Attack (Instant)=3,2nd Super Attack (Instant)=4,1st Super Attack (Instant)=5
+blast_combo7 | list | 0x95 | 0x9E | Combos | Blast combos | Rush ki wave blast combo | list:1st Super Attack=0,2nd Super Attack=1,1st Super Attack=2,1st Super Attack (Instant)=3,2nd Super Attack (Instant)=4,1st Super Attack (Instant)=5
+blast_combo8 | list | 0x96 | 0x9F | Combos | Blast combos | Z burst blast combo | list:1st Super Attack=0,2nd Super Attack=1,1st Super Attack=2,1st Super Attack (Instant)=3,2nd Super Attack (Instant)=4,1st Super Attack (Instant)=5
+blast_combo9 | list | 0x97 | 0xA0 | Combos | Blast combos | Lift strike blast combo | list:1st Super Attack=0,2nd Super Attack=1,1st Super Attack=2,1st Super Attack (Instant)=3,2nd Super Attack (Instant)=4,1st Super Attack (Instant)=5
+cflags1 | bits | 0x14 | 0x1C | Combos | Combo flags | Combo flags 1 | bits:Step-in,Rush in,*,High speed rush movement,Jump energy volley,Deflect ki blasts,Recovery from throw,Sonic sway
+cflags2 | bits | 0x15 | 0x1D | Combos | Combo flags | Combo flags 2 | bits:Sonic sway strike,*,*,Lift strike,Ground slash,Vanishing attack,Lightning attack,Burst meteor
+cflags3 | bits | 0x16 | 0x1E | Combos | Combo flags | Combo flags 3 | bits:Burst smash,Dragon tornado,Heavy crush,Giant throw,Sonic impact,Kiai cannon smash,Spiral slash,Rolling hurricane
+cflags4 | bits | 0x17 | 0x1F | Combos | Combo flags | Combo flags 4 | bits:Power press,Energy storm (BT4),Tri-attack,Aerial barrage,Delta storm,Blaster wave combo,*,*
+cflags5 | bits | 0x18 | 0x20 | Combos | Combo flags | Combo flags 5 | bits:*,*,*,Super movement,MAX violent rush,*,MAX melee armor,MAX ki blasts armor
+cflags6 | bits | 0x19 | 0x21 | Combos | Combo flags | Combo flags 6 | bits:*,Hyper smash,*,*,MAX combo vanishing attack,MAX combo ground slash,MAX combo heavy finish,MAX combo blaster wave
+cflags7 | bits | 0x1A | 0x22 | Combos | Combo flags | Combo flags 7 | bits:MAX combo rolling hammer,MAX combo power press,MAX combo rush ki wave,MAX combo Z burst,MAX combo lift strike,*,*,*
+cflags8 | bits | 0x1B | 0x23 | Combos | Combo flags | Combo flags 8 | bits:*,*,*,*,*,*,*,*
+tf1 | char | 0x98 | 0xA2 | Transformations | Transformation 1 | Becomes | 
+tf1_cost | u8 | 0x9C | 0xA6 | Transformations | Transformation 1 | Cost (blast stock) | 
+tf1_kind | list | 0xA0 | 0xAA | Transformations | Transformation 1 | Kind | list:Normal (Camera 1)=0,Back to Normal=1,Normal (Camera 2)=2,Cell Absorption=3,Pilaf Machine=4
+tf1_aura | list | 0xA4 | 0xAE | Transformations | Transformation 1 | Aura effect | list:No Aura=0,Blue Aura=1,Yellow Aura=2,Night Only=3,Artificial Moon=4,* Unknown 1=5,* Unknown 2=6,* Unknown 3=7,Red Aura=8,Green Aura=9,Violet Aura=10,Super Saiyan Aura=11
+tf1_assist | char | 0xA8 | 0xB2 | Transformations | Transformation 1 | Assist | 
+tf2 | char | 0x99 | 0xA3 | Transformations | Transformation 2 | Becomes | 
+tf2_cost | u8 | 0x9D | 0xA7 | Transformations | Transformation 2 | Cost (blast stock) | 
+tf2_kind | list | 0xA1 | 0xAB | Transformations | Transformation 2 | Kind | list:Normal (Camera 1)=0,Back to Normal=1,Normal (Camera 2)=2,Cell Absorption=3,Pilaf Machine=4
+tf2_aura | list | 0xA5 | 0xAF | Transformations | Transformation 2 | Aura effect | list:No Aura=0,Blue Aura=1,Yellow Aura=2,Night Only=3,Artificial Moon=4,* Unknown 1=5,* Unknown 2=6,* Unknown 3=7,Red Aura=8,Green Aura=9,Violet Aura=10,Super Saiyan Aura=11
+tf2_assist | char | 0xA9 | 0xB3 | Transformations | Transformation 2 | Assist | 
+tf3 | char | 0x9A | 0xA4 | Transformations | Transformation 3 | Becomes | 
+tf3_cost | u8 | 0x9E | 0xA8 | Transformations | Transformation 3 | Cost (blast stock) | 
+tf3_kind | list | 0xA2 | 0xAC | Transformations | Transformation 3 | Kind | list:Normal (Camera 1)=0,Back to Normal=1,Normal (Camera 2)=2,Cell Absorption=3,Pilaf Machine=4
+tf3_aura | list | 0xA6 | 0xB0 | Transformations | Transformation 3 | Aura effect | list:No Aura=0,Blue Aura=1,Yellow Aura=2,Night Only=3,Artificial Moon=4,* Unknown 1=5,* Unknown 2=6,* Unknown 3=7,Red Aura=8,Green Aura=9,Violet Aura=10,Super Saiyan Aura=11
+tf3_assist | char | 0xAA | 0xB4 | Transformations | Transformation 3 | Assist | 
+tf4 | char | 0x9B | 0xA5 | Transformations | Transformation 4 | Becomes | 
+tf4_cost | u8 | 0x9F | 0xA9 | Transformations | Transformation 4 | Cost (blast stock) | 
+tf4_kind | list | 0xA3 | 0xAD | Transformations | Transformation 4 | Kind | list:Normal (Camera 1)=0,Back to Normal=1,Normal (Camera 2)=2,Cell Absorption=3,Pilaf Machine=4
+tf4_aura | list | 0xA7 | 0xB1 | Transformations | Transformation 4 | Aura effect | list:No Aura=0,Blue Aura=1,Yellow Aura=2,Night Only=3,Artificial Moon=4,* Unknown 1=5,* Unknown 2=6,* Unknown 3=7,Red Aura=8,Green Aura=9,Violet Aura=10,Super Saiyan Aura=11
+tf4_assist | char | 0xAB | 0xB5 | Transformations | Transformation 4 | Assist | 
+tf_next | list | 0xAC | 0xB6 | Transformations | All forms | Next form | list:Transformation 1=0,Transformation 2=1,Transformation 3=2,Transformation 4=3,Back to normal only=255
+tf_bonus | bits | 0xAD | 0xB7 | Transformations | All forms | Bonus | bits:0.5 health bars,1 health bar,Full ki bars,Automatic sparking mode (fusion only),Form 1 costume repaired,Form 2 costume repaired,Form 3 costume repaired,Form 4 costume repaired
+fu1_type | list | 0xB1 | 0xBB | Fusions | Fusion 1 | Type | list:None=0,Metamoru=1,Potara=2
+fu1 | char | 0xB4 | 0xBE | Fusions | Fusion 1 | Result | 
+fu1_cost | u8 | 0xAE | 0xB8 | Fusions | Fusion 1 | Cost (blast stock) | 
+fu1_p | char | 0xB7 | - | Fusions | Fusion 1 | Partner | copy=0xBA
+fu1_p2 | char | 0xBB | - | Fusions | Fusion 1 | Partner 2nd form | 
+fu1_t1 | char | - | 0xC4 | Fusions | Fusion 1 | Partner | 
+fu1_p3 | char | 0xBC | - | Fusions | Fusion 1 | Partner 3rd form | 
+fu1_t2 | char | - | 0xC5 | Fusions | Fusion 1 | Partner 2nd form | 
+fu1_p4 | char | 0xBD | - | Fusions | Fusion 1 | Partner 4th form | 
+fu1_t3 | char | - | 0xC6 | Fusions | Fusion 1 | Partner 3rd form | 
+fu1_sup | list | - | 0xC1 | Fusions | Fusion 1 | Partner support | list:Goku End Fusion=2,Vegeta End Fusion=34,Goten Fusion=46,Goten SS Fusion=47,Trunks Kid Fusion=44,Trunks Kid SS Fusion=45,Android 17=101,Android 18=102,Burter=88,Jeice=89,Piccolo End=23,Gohan SS=18,Obj=249,Obj=253,Obj=248,Obj=246,Goku End Obj=161,Goku End SS Obj=162,Goku End SS2 Obj=163,Goku End SS3 Obj=164,Gohan Kid Obj=165,Gohan Teen Obj=166,Gohan Teen SS Obj=167,Gohan Teen SS2 Obj=168,Gohan Obj=169,Gohan SS Obj=170,Gohan SS2 Obj=171,Gohan Ultimate Obj=172,Piccolo End Obj=173,Krillin Obj=174,Yamcha Obj=175,Tien Obj=176,Chiaotzu Obj=177,Vegeta Scouter Obj=178,Vegeta End C1 Obj=179,Vegeta End C2 Obj=231,Vegeta End SS C1 Obj=180,Vegeta End SS C2 Obj=232,Vegeta End SS2 Obj=181,Majin Vegeta Obj=182,Trunks Kid Obj=187,Trunks Kid SS Obj=188,Trunks Future Obj=183,Trunks Future SS Obj=184,Trunks Melee Obj=185,Trunks Melee SS Obj=186,Videl Obj=195,Goten Obj=189,Goten SS Obj=190,Gotenks SS Obj=191,Gotenks SS3 Obj=192,Gogeta SS Obj=194,Vegito SS Obj=193,Bardock Obj=196,Raditz Obj=197,Saibaman C1 Obj=198,Saibaman C2 Obj=233,Saibaman C3 Obj=234,Saibaman C4 Obj=235,Nappa Obj=199,Cui Obj=203,Zarbon Obj=200,Monster Zarbon Obj=201,Dodoria Obj=202,Ginyu Obj=204,Recoome Obj=205,Guldo Obj=208,Jeice Obj=207,Burter Obj=206,Frieza 1 Form Obj=209,Frieza 2 Form Obj=210,Frieza 3 Form Obj=213,Frieza Final Form Obj=212,Frieza Full Power Obj=211,Android 16 Obj=215,Android 17 Obj=216,Android 18 Obj=217,Android 19 Obj=218,Dr Gero Obj=219,Cell Jr C1 Obj=224,Cell Jr C2 Obj=239,Cell Jr C3 Obj=240,Cell Jr C4 Obj=241,Cell 1 Form Obj=220,Cell 2 Form Obj=221,Cell Perfect Form Obj=222,Cell Perfect Obj=223,Dabura Obj=225,Majin Buu Obj=226,Super Bu Obj=227,Super Buu Gohan Obj=228,Kid Buu Obj=229,Brolly LSS Obj=230,Frieza Soldier C1 Obj=242,Frieza Soldier C2 Obj=243,Frieza Soldier C3 Obj=244,Frieza Soldier C4 Obj=245,None=255
+fu2_type | list | 0xB2 | 0xBC | Fusions | Fusion 2 | Type | list:None=0,Metamoru=1,Potara=2
+fu2 | char | 0xB5 | 0xBF | Fusions | Fusion 2 | Result | 
+fu2_cost | u8 | 0xAF | 0xB9 | Fusions | Fusion 2 | Cost (blast stock) | 
+fu2_p | char | 0xB8 | - | Fusions | Fusion 2 | Partner | copy=0xBE
+fu2_p2 | char | 0xBF | - | Fusions | Fusion 2 | Partner 2nd form | 
+fu2_t1 | char | - | 0xC8 | Fusions | Fusion 2 | Partner | 
+fu2_p3 | char | 0xC0 | - | Fusions | Fusion 2 | Partner 3rd form | 
+fu2_t2 | char | - | 0xC9 | Fusions | Fusion 2 | Partner 2nd form | 
+fu2_p4 | char | 0xC1 | - | Fusions | Fusion 2 | Partner 4th form | 
+fu2_t3 | char | - | 0xCA | Fusions | Fusion 2 | Partner 3rd form | 
+fu2_sup | list | - | 0xC2 | Fusions | Fusion 2 | Partner support | list:Goku End Fusion=2,Vegeta End Fusion=34,Goten Fusion=46,Goten SS Fusion=47,Trunks Kid Fusion=44,Trunks Kid SS Fusion=45,Android 17=101,Android 18=102,Burter=88,Jeice=89,Piccolo End=23,Gohan SS=18,Obj=249,Obj=253,Obj=248,Obj=246,Goku End Obj=161,Goku End SS Obj=162,Goku End SS2 Obj=163,Goku End SS3 Obj=164,Gohan Kid Obj=165,Gohan Teen Obj=166,Gohan Teen SS Obj=167,Gohan Teen SS2 Obj=168,Gohan Obj=169,Gohan SS Obj=170,Gohan SS2 Obj=171,Gohan Ultimate Obj=172,Piccolo End Obj=173,Krillin Obj=174,Yamcha Obj=175,Tien Obj=176,Chiaotzu Obj=177,Vegeta Scouter Obj=178,Vegeta End C1 Obj=179,Vegeta End C2 Obj=231,Vegeta End SS C1 Obj=180,Vegeta End SS C2 Obj=232,Vegeta End SS2 Obj=181,Majin Vegeta Obj=182,Trunks Kid Obj=187,Trunks Kid SS Obj=188,Trunks Future Obj=183,Trunks Future SS Obj=184,Trunks Melee Obj=185,Trunks Melee SS Obj=186,Videl Obj=195,Goten Obj=189,Goten SS Obj=190,Gotenks SS Obj=191,Gotenks SS3 Obj=192,Gogeta SS Obj=194,Vegito SS Obj=193,Bardock Obj=196,Raditz Obj=197,Saibaman C1 Obj=198,Saibaman C2 Obj=233,Saibaman C3 Obj=234,Saibaman C4 Obj=235,Nappa Obj=199,Cui Obj=203,Zarbon Obj=200,Monster Zarbon Obj=201,Dodoria Obj=202,Ginyu Obj=204,Recoome Obj=205,Guldo Obj=208,Jeice Obj=207,Burter Obj=206,Frieza 1 Form Obj=209,Frieza 2 Form Obj=210,Frieza 3 Form Obj=213,Frieza Final Form Obj=212,Frieza Full Power Obj=211,Android 16 Obj=215,Android 17 Obj=216,Android 18 Obj=217,Android 19 Obj=218,Dr Gero Obj=219,Cell Jr C1 Obj=224,Cell Jr C2 Obj=239,Cell Jr C3 Obj=240,Cell Jr C4 Obj=241,Cell 1 Form Obj=220,Cell 2 Form Obj=221,Cell Perfect Form Obj=222,Cell Perfect Obj=223,Dabura Obj=225,Majin Buu Obj=226,Super Bu Obj=227,Super Buu Gohan Obj=228,Kid Buu Obj=229,Brolly LSS Obj=230,Frieza Soldier C1 Obj=242,Frieza Soldier C2 Obj=243,Frieza Soldier C3 Obj=244,Frieza Soldier C4 Obj=245,None=255
+fu3_type | list | 0xB3 | 0xBD | Fusions | Fusion 3 | Type | list:None=0,Metamoru=1,Potara=2
+fu3 | char | 0xB6 | 0xC0 | Fusions | Fusion 3 | Result | 
+fu3_cost | u8 | 0xB0 | 0xBA | Fusions | Fusion 3 | Cost (blast stock) | 
+fu3_p | char | 0xB9 | - | Fusions | Fusion 3 | Partner | copy=0xC2
+fu3_p2 | char | 0xC3 | - | Fusions | Fusion 3 | Partner 2nd form | 
+fu3_t1 | char | - | 0xCC | Fusions | Fusion 3 | Partner | 
+fu3_p3 | char | 0xC4 | - | Fusions | Fusion 3 | Partner 3rd form | 
+fu3_t2 | char | - | 0xCD | Fusions | Fusion 3 | Partner 2nd form | 
+fu3_p4 | char | 0xC5 | - | Fusions | Fusion 3 | Partner 4th form | 
+fu3_t3 | char | - | 0xCE | Fusions | Fusion 3 | Partner 3rd form | 
+fu3_sup | list | - | 0xC3 | Fusions | Fusion 3 | Partner support | list:Goku End Fusion=2,Vegeta End Fusion=34,Goten Fusion=46,Goten SS Fusion=47,Trunks Kid Fusion=44,Trunks Kid SS Fusion=45,Android 17=101,Android 18=102,Burter=88,Jeice=89,Piccolo End=23,Gohan SS=18,Obj=249,Obj=253,Obj=248,Obj=246,Goku End Obj=161,Goku End SS Obj=162,Goku End SS2 Obj=163,Goku End SS3 Obj=164,Gohan Kid Obj=165,Gohan Teen Obj=166,Gohan Teen SS Obj=167,Gohan Teen SS2 Obj=168,Gohan Obj=169,Gohan SS Obj=170,Gohan SS2 Obj=171,Gohan Ultimate Obj=172,Piccolo End Obj=173,Krillin Obj=174,Yamcha Obj=175,Tien Obj=176,Chiaotzu Obj=177,Vegeta Scouter Obj=178,Vegeta End C1 Obj=179,Vegeta End C2 Obj=231,Vegeta End SS C1 Obj=180,Vegeta End SS C2 Obj=232,Vegeta End SS2 Obj=181,Majin Vegeta Obj=182,Trunks Kid Obj=187,Trunks Kid SS Obj=188,Trunks Future Obj=183,Trunks Future SS Obj=184,Trunks Melee Obj=185,Trunks Melee SS Obj=186,Videl Obj=195,Goten Obj=189,Goten SS Obj=190,Gotenks SS Obj=191,Gotenks SS3 Obj=192,Gogeta SS Obj=194,Vegito SS Obj=193,Bardock Obj=196,Raditz Obj=197,Saibaman C1 Obj=198,Saibaman C2 Obj=233,Saibaman C3 Obj=234,Saibaman C4 Obj=235,Nappa Obj=199,Cui Obj=203,Zarbon Obj=200,Monster Zarbon Obj=201,Dodoria Obj=202,Ginyu Obj=204,Recoome Obj=205,Guldo Obj=208,Jeice Obj=207,Burter Obj=206,Frieza 1 Form Obj=209,Frieza 2 Form Obj=210,Frieza 3 Form Obj=213,Frieza Final Form Obj=212,Frieza Full Power Obj=211,Android 16 Obj=215,Android 17 Obj=216,Android 18 Obj=217,Android 19 Obj=218,Dr Gero Obj=219,Cell Jr C1 Obj=224,Cell Jr C2 Obj=239,Cell Jr C3 Obj=240,Cell Jr C4 Obj=241,Cell 1 Form Obj=220,Cell 2 Form Obj=221,Cell Perfect Form Obj=222,Cell Perfect Obj=223,Dabura Obj=225,Majin Buu Obj=226,Super Bu Obj=227,Super Buu Gohan Obj=228,Kid Buu Obj=229,Brolly LSS Obj=230,Frieza Soldier C1 Obj=242,Frieza Soldier C2 Obj=243,Frieza Soldier C3 Obj=244,Frieza Soldier C4 Obj=245,None=255
+u1c | s32 | 0x1C | 0x24 | - | Other | * (0x1C) | 
+u20 | s32 | 0x20 | 0x28 | - | Other | * (0x20) | 
+u24 | s32 | 0x24 | 0x2C | - | Other | * (0x24) | 
+u5c | f32 | 0x5C | 0x64 | - | Other | * (0x5C) | 
+uc8 | f32 | 0xC8 | - | - | Other | * (0xC8) | 
+ttt10 | u8 | - | 0x10 | - | Other | * (TTT 0x10) | 
+ttt11 | u8 | - | 0x11 | - | Other | * (TTT 0x11) | 
+ttt12 | u8 | - | 0x12 | - | Other | * (TTT 0x12) | 
+ttt13 | u8 | - | 0x13 | - | Other | * (TTT 0x13) | 
+ttt14 | u8 | - | 0x14 | - | Other | * (TTT 0x14) | 
+ttt15 | u8 | - | 0x15 | - | Other | * (TTT 0x15) | 
+ttt16 | u8 | - | 0x16 | - | Other | * (TTT 0x16) | 
+ttt17 | u8 | - | 0x17 | - | Other | * (TTT 0x17) | 
+ttt90 | u8 | - | 0x90 | - | Other | * (TTT 0x90) | 
+tttA1 | u8 | - | 0xA1 | - | Other | * (TTT 0xA1) | 
+
+[file 18]
+name = 018_melee_param.dat
+title = Melee
+item = Move
+step = 0x30 0x30
+items = @moves
+m04 | s16 | 0x4 | 0x4 | Melee | Hit | Health Damage | 
+m06 | s16 | 0x6 | 0x6 | Melee | Hit | Health Damage (Guard) | 
+m08 | s16 | 0x8 | 0x8 | Melee | Hit | Ki Damage on Guard Crush | 
+m0a | s16 | 0xA | 0xA | Melee | Hit | Ki Gain | 
+m0c | s16 | 0xC | 0xC | Melee | Hit | Health Absortion | 
+m0e | s16 | 0xE | 0xE | Melee | Hit | Ki Absortion | 
+m15 | s8 | 0x15 | 0x15 | Melee | Hit | Horizontal Knockback | 
+m16 | s8 | 0x16 | 0x16 | Melee | Hit | Vertical Knockback | 
+m1b | list | 0x1B | 0x1B | Melee | Hit | Special Effect | list:Nothing=0,Nothing=1,Normal Strike 1=2,Normal Strike 2=3,Strong Strike=4,Charged Right Strike (Short)=5,Charged Left Strike (Short)=6,Charged Up Strike (Short)=7,Charged Down Strike (Short)=8,?=9,Lift Strike=10,Ground Slash=11,Heavy Finish=12,Heavy Finish Combo=13,?=14,Charged Neutral Strike (Short)=15,Charged Neutral Strike (Med)=16,Charged Neutral Strike (Strong)=17,?=18,?=19,Throw=20,?=21,Giant Throw=22,Neutral Paralysis (Short)=23,Neutral Paralysis (Medium)=24,Neutral Paralysis (Strong)=25,Ground Paralysis (Short)=26,Ground Paralysis (Medium)=27,Ground Paralysis (Strong)=28,?=29,?=30,?=31,?=32,?=33,2nd Attack Blast Combo=34,?=35,?=36,Throw=37,?=38,?=39,?=40,?=41,?=42,?=43,?=44,?=45,?=46,?=47,?=48,?=49,Unknown=50
+m1c | list | 0x1C | 0x1C | - | Hit | Special Effect 2? (0x1C) | list:Default=0,Nothing=1,Normal Strike 1=2,Normal Strike 2=3,Strong Strike=4,Charged Right Strike (Short)=5,Charged Left Strike (Short)=6,Charged Up Strike (Short)=7,Charged Down Strike (Short)=8,?=9,Lift Strike=10,Ground Slash=11,Heavy Finish=12,Heavy Finish Combo=13,?=14,Charged Neutral Strike (Short)=15,Charged Neutral Strike (Med)=16,Charged Neutral Strike (Strong)=17,?=18,?=19,Throw=20,?=21,Giant Throw=22,Neutral Paralysis (Short)=23,Neutral Paralysis (Medium)=24,Neutral Paralysis (Strong)=25,Ground Paralysis (Short)=26,Ground Paralysis (Medium)=27,Ground Paralysis (Strong)=28,?=29,?=30,?=31,?=32,?=33,2nd Attack Blast Combo=34,?=35,?=36,Throw=37,?=38,?=39,?=40,?=41,?=42,?=43,?=44,?=45,?=46,?=47,?=48,?=49,Unknown=50
+m1d | list | 0x1D | 0x1D | - | Hit | Special Effect 3? (0x1D) | list:Default=0,Nothing=1,Normal Strike 1=2,Normal Strike 2=3,Strong Strike=4,Charged Right Strike (Short)=5,Charged Left Strike (Short)=6,Charged Up Strike (Short)=7,Charged Down Strike (Short)=8,?=9,Lift Strike=10,Ground Slash=11,Heavy Finish=12,Heavy Finish Combo=13,?=14,Charged Neutral Strike (Short)=15,Charged Neutral Strike (Med)=16,Charged Neutral Strike (Strong)=17,?=18,?=19,Throw=20,?=21,Giant Throw=22,Neutral Paralysis (Short)=23,Neutral Paralysis (Medium)=24,Neutral Paralysis (Strong)=25,Ground Paralysis (Short)=26,Ground Paralysis (Medium)=27,Ground Paralysis (Strong)=28,?=29,?=30,?=31,?=32,?=33,2nd Attack Blast Combo=34,?=35,?=36,Throw=37,?=38,?=39,?=40,?=41,?=42,?=43,?=44,?=45,?=46,?=47,?=48,?=49,Unknown=50
+m1e | list | 0x1E | 0x1E | - | Hit | Special Effect 4? (0x1E) | list:Default=0,Nothing=1,Normal Strike 1=2,Normal Strike 2=3,Strong Strike=4,Charged Right Strike (Short)=5,Charged Left Strike (Short)=6,Charged Up Strike (Short)=7,Charged Down Strike (Short)=8,?=9,Lift Strike=10,Ground Slash=11,Heavy Finish=12,Heavy Finish Combo=13,?=14,Charged Neutral Strike (Short)=15,Charged Neutral Strike (Med)=16,Charged Neutral Strike (Strong)=17,?=18,?=19,Throw=20,?=21,Giant Throw=22,Neutral Paralysis (Short)=23,Neutral Paralysis (Medium)=24,Neutral Paralysis (Strong)=25,Ground Paralysis (Short)=26,Ground Paralysis (Medium)=27,Ground Paralysis (Strong)=28,?=29,?=30,?=31,?=32,?=33,2nd Attack Blast Combo=34,?=35,?=36,Throw=37,?=38,?=39,?=40,?=41,?=42,?=43,?=44,?=45,?=46,?=47,?=48,?=49,Unknown=50
+m1f | list | 0x1F | 0x1F | - | Hit | Special Effect 5? (0x1F) | list:Default=0,Nothing=1,Normal Strike 1=2,Normal Strike 2=3,Strong Strike=4,Charged Right Strike (Short)=5,Charged Left Strike (Short)=6,Charged Up Strike (Short)=7,Charged Down Strike (Short)=8,?=9,Lift Strike=10,Ground Slash=11,Heavy Finish=12,Heavy Finish Combo=13,?=14,Charged Neutral Strike (Short)=15,Charged Neutral Strike (Med)=16,Charged Neutral Strike (Strong)=17,?=18,?=19,Throw=20,?=21,Giant Throw=22,Neutral Paralysis (Short)=23,Neutral Paralysis (Medium)=24,Neutral Paralysis (Strong)=25,Ground Paralysis (Short)=26,Ground Paralysis (Medium)=27,Ground Paralysis (Strong)=28,?=29,?=30,?=31,?=32,?=33,2nd Attack Blast Combo=34,?=35,?=36,Throw=37,?=38,?=39,?=40,?=41,?=42,?=43,?=44,?=45,?=46,?=47,?=48,?=49,Unknown=50
+m21 | list | 0x21 | 0x21 | - | Hit | Special Effect 6? (0x21) | list:Default=0,Nothing=1,Normal Strike 1=2,Normal Strike 2=3,Strong Strike=4,Charged Right Strike (Short)=5,Charged Left Strike (Short)=6,Charged Up Strike (Short)=7,Charged Down Strike (Short)=8,?=9,Lift Strike=10,Ground Slash=11,Heavy Finish=12,Heavy Finish Combo=13,?=14,Charged Neutral Strike (Short)=15,Charged Neutral Strike (Med)=16,Charged Neutral Strike (Strong)=17,?=18,?=19,Throw=20,?=21,Giant Throw=22,Neutral Paralysis (Short)=23,Neutral Paralysis (Medium)=24,Neutral Paralysis (Strong)=25,Ground Paralysis (Short)=26,Ground Paralysis (Medium)=27,Ground Paralysis (Strong)=28,?=29,?=30,?=31,?=32,?=33,2nd Attack Blast Combo=34,?=35,?=36,Throw=37,?=38,?=39,?=40,?=41,?=42,?=43,?=44,?=45,?=46,?=47,?=48,?=49,Unknown=50
+m22 | list | 0x22 | 0x22 | - | Hit | Special Effect 7? (0x22) | list:Default=0,Nothing=1,Normal Strike 1=2,Normal Strike 2=3,Strong Strike=4,Charged Right Strike (Short)=5,Charged Left Strike (Short)=6,Charged Up Strike (Short)=7,Charged Down Strike (Short)=8,?=9,Lift Strike=10,Ground Slash=11,Heavy Finish=12,Heavy Finish Combo=13,?=14,Charged Neutral Strike (Short)=15,Charged Neutral Strike (Med)=16,Charged Neutral Strike (Strong)=17,?=18,?=19,Throw=20,?=21,Giant Throw=22,Neutral Paralysis (Short)=23,Neutral Paralysis (Medium)=24,Neutral Paralysis (Strong)=25,Ground Paralysis (Short)=26,Ground Paralysis (Medium)=27,Ground Paralysis (Strong)=28,?=29,?=30,?=31,?=32,?=33,2nd Attack Blast Combo=34,?=35,?=36,Throw=37,?=38,?=39,?=40,?=41,?=42,?=43,?=44,?=45,?=46,?=47,?=48,?=49,Unknown=50
+m23 | list | 0x23 | 0x24 | Melee | Hit | Visual Effect | list:No VFX=0,Light Strike 1=1,Strong Strike=2,Strong Strike 2=3,Light Strike 2=4,Strong Strike 3=5,Very Strong Strike=6,Ki Cannon=7,Lift Strike=8,Ground Slash=9,Blaster Wave=10,Unknown=11
+m24 | list | 0x24 | 0x25 | Melee | Hit | Sound Effect | list:No Sound=0,Type 1=1,Type 2=2,Type 3=3,Type 4=4,Type 5=5,Type 6=6,Type 7=7,Type 8=8,Type 9=9,Type 10=10,Type 11=11,Type 12=12,Type 13=13,Type 14=14
+m27 | u8 | 0x27 | 0x28 | - | Hit | Guard Crush (Upward?) | 
+m28 | u8 | 0x28 | 0x29 | - | Hit | Guard Crush (Downward?) | 
+m29 | list | 0x29 | 0x2A | Melee | Hit | Guard Crush | list:Disabled=0,Enabled=1,? (Only Upwards?)=2,? (Only Downwards?)=3,?=4
+m2c | list | 0x2C | 0x2D | Melee | Hit | Armor Break Type | list:Can't Break Armor=0,Can Break Armor=1,?=2
+m10 | s16 | 0x10 | 0x10 | - | Hit | Byte_10 | 
+m12 | u8 | 0x12 | 0x12 | - | Hit | Byte_12 | 
+m13 | u8 | 0x13 | 0x13 | - | Hit | Byte_13 | 
+m14 | u8 | 0x14 | 0x14 | - | Hit | Byte_14 (Movement Speed?) | 
+m17 | u8 | 0x17 | 0x17 | - | Hit | Byte_17 | 
+m18 | u8 | 0x18 | 0x18 | - | Hit | Byte_18 | 
+m19 | u8 | 0x19 | 0x19 | - | Hit | Byte_19 | 
+m1a | u8 | 0x1A | 0x1A | - | Hit | Byte_1A | 
+m20 | u8 | 0x20 | 0x20 | Melee | Hit | Enemy Launch Type | 
+m25 | u8 | 0x25 | 0x26 | - | Hit | Byte_25 | 
+m26 | u8 | 0x26 | 0x27 | - | Hit | Byte_26 | 
+m2a | u8 | 0x2A | 0x2B | - | Hit | Byte_2A | 
+m2b | u8 | 0x2B | 0x2C | - | Hit | Byte_2B | 
+m2d | u8 | 0x2D | 0x2E | - | Hit | Byte_2D | 
+m2e | u8 | 0x2E | 0x2F | - | Hit | Byte_2E | 
+m2f | u8 | 0x2F | - | - | Hit | Byte_2F | 
+mf00 | bits | 0x0 | 0x0 | Melee | Flags | Flags 1 | bits:*,*,*,*,*,*,Negable Throw,*
+mf01 | bits | 0x1 | 0x1 | Melee | Flags | Flags 2 | bits:*,*,*,*,*,* (EQUIPMENT),*,*
+mf02 | bits | 0x2 | 0x2 | Melee | Flags | Flags 3 | bits:*,*,*,*,1 Bar Ki Consumption?,*,*,*
+mf03 | bits | 0x3 | 0x3 | Melee | Flags | Flags 4 | bits:*,*,*,*,*,*,*,*
+
+[file 19]
+name = 019_kidan_param.dat
+title = Ki blasts
+item = Ki blast
+step = 0x34 0x38
+items = Quick Energy Blast, Charged Energy Blast (Light), Charged Energy Blast (Medium), Charged Energy Blast (Strong), Dash Energy Blast, Dash Charged Energy Blast (Light), Dash Charged Energy Blast (Medium), Dash Charged Energy Blast (Strong), Jump Energy Blast, Jump Charged Energy Blast (Light), Jump Charged Energy Blast (Medium), Jump Charged Energy Blast (Strong), Energy Wave Combo Finisher
+k02 | list | 0x2 | 0x2 | Ki blasts | Blast | Type | list:Normal=0,Charged=1,Rock=2,Bomb=3,Kienzan=4,Sword Slash=5,Unknown=6
+k04 | s32 | 0x4 | 0x4 | Ki blasts | Blast | Damage | 
+k08 | s32 | 0x8 | 0x8 | Ki blasts | Blast | Damage (Guard) | 
+k0c | s32 | 0xC | 0xC | Ki blasts | Blast | Ki Consumption | 
+k10 | f32 | 0x10 | 0x10 | Ki blasts | Blast | Speed | 
+k14 | f32 | 0x14 | 0x14 | Ki blasts | Blast | Direction | 
+k18 | f32 | 0x18 | 0x18 | Ki blasts | Blast | Duration | 
+k1c | f32 | 0x1C | 0x1C | Ki blasts | Blast | Impact | 
+k28 | f32 | 0x28 | 0x2C | Ki blasts | Blast | Size | 
+k30 | u8 | 0x30 | 0x34 | Ki blasts | Blast | Shots | 
+k31 | list | 0x31 | 0x35 | Ki blasts | Blast | Position | list:Normal=0,Front=1,Up=2,Left and Right=3,Left=4,Right=5,Unknown=6
+k24 | list | 0x24 | 0x24 | Ki blasts | Opponent | Hit Effect | list:Nothing=0,Nothing=1,Normal Strike 1=2,Normal Strike 2=3,Strong Strike=4,Charged Right Strike (Short)=5,Charged Left Strike (Short)=6,Charged Up Strike (Short)=7,Charged Down Strike (Short)=8,?=9,Lift Strike=10,Ground Slash=11,Heavy Finish=12,Heavy Finish Combo=13,?=14,Charged Neutral Strike (Short)=15,Charged Neutral Strike (Med)=16,Charged Neutral Strike (Strong)=17,?=18,?=19,Throw=20,?=21,Giant Throw=22,Neutral Paralysis (Short)=23,Neutral Paralysis (Medium)=24,Neutral Paralysis (Strong)=25,Ground Paralysis (Short)=26,Ground Paralysis (Medium)=27,Ground Paralysis (Strong)=28,?=29,?=30,?=31,?=32,?=33,2nd Attack Blast Combo=34,?=35,?=36,Throw=37,?=38,?=39,?=40,?=41,?=42,?=43,?=44,?=45,?=46,?=47,?=48,?=49,Unknown=50
+k25 | list | 0x25 | 0x25 | Ki blasts | Opponent | Hit Effect (Downed) | list:Nothing=0,Nothing=1,Normal Strike 1=2,Normal Strike 2=3,Strong Strike=4,Charged Right Strike (Short)=5,Charged Left Strike (Short)=6,Charged Up Strike (Short)=7,Charged Down Strike (Short)=8,?=9,Lift Strike=10,Ground Slash=11,Heavy Finish=12,Heavy Finish Combo=13,?=14,Charged Neutral Strike (Short)=15,Charged Neutral Strike (Med)=16,Charged Neutral Strike (Strong)=17,?=18,?=19,Throw=20,?=21,Giant Throw=22,Neutral Paralysis (Short)=23,Neutral Paralysis (Medium)=24,Neutral Paralysis (Strong)=25,Ground Paralysis (Short)=26,Ground Paralysis (Medium)=27,Ground Paralysis (Strong)=28,?=29,?=30,?=31,?=32,?=33,2nd Attack Blast Combo=34,?=35,?=36,Throw=37,?=38,?=39,?=40,?=41,?=42,?=43,?=44,?=45,?=46,?=47,?=48,?=49,Unknown=50
+k26 | list | 0x26 | 0x26 | - | Opponent | Hit Effect (2?) | list:Nothing=0,Nothing=1,Normal Strike 1=2,Normal Strike 2=3,Strong Strike=4,Charged Right Strike (Short)=5,Charged Left Strike (Short)=6,Charged Up Strike (Short)=7,Charged Down Strike (Short)=8,?=9,Lift Strike=10,Ground Slash=11,Heavy Finish=12,Heavy Finish Combo=13,?=14,Charged Neutral Strike (Short)=15,Charged Neutral Strike (Med)=16,Charged Neutral Strike (Strong)=17,?=18,?=19,Throw=20,?=21,Giant Throw=22,Neutral Paralysis (Short)=23,Neutral Paralysis (Medium)=24,Neutral Paralysis (Strong)=25,Ground Paralysis (Short)=26,Ground Paralysis (Medium)=27,Ground Paralysis (Strong)=28,?=29,?=30,?=31,?=32,?=33,2nd Attack Blast Combo=34,?=35,?=36,Throw=37,?=38,?=39,?=40,?=41,?=42,?=43,?=44,?=45,?=46,?=47,?=48,?=49,Unknown=50
+k27 | list | 0x27 | 0x27 | - | Opponent | Hit Effect (Downed 2?) | list:Nothing=0,Nothing=1,Normal Strike 1=2,Normal Strike 2=3,Strong Strike=4,Charged Right Strike (Short)=5,Charged Left Strike (Short)=6,Charged Up Strike (Short)=7,Charged Down Strike (Short)=8,?=9,Lift Strike=10,Ground Slash=11,Heavy Finish=12,Heavy Finish Combo=13,?=14,Charged Neutral Strike (Short)=15,Charged Neutral Strike (Med)=16,Charged Neutral Strike (Strong)=17,?=18,?=19,Throw=20,?=21,Giant Throw=22,Neutral Paralysis (Short)=23,Neutral Paralysis (Medium)=24,Neutral Paralysis (Strong)=25,Ground Paralysis (Short)=26,Ground Paralysis (Medium)=27,Ground Paralysis (Strong)=28,?=29,?=30,?=31,?=32,?=33,2nd Attack Blast Combo=34,?=35,?=36,Throw=37,?=38,?=39,?=40,?=41,?=42,?=43,?=44,?=45,?=46,?=47,?=48,?=49,Unknown=50
+k03 | u8 | 0x3 | 0x3 | - | Other | * (0x03) | 
+k20 | f32 | 0x20 | 0x20 | - | Other | * (0x20) | 
+k2c | f32 | 0x2C | 0x30 | - | Other | * (0x2C) | 
+k32 | u8 | 0x32 | 0x36 | - | Other | * (0x32) (Unused?) | 
+k33 | u8 | 0x33 | 0x37 | - | Other | * (0x33) (Unused?) | 
+kf00 | bits | 0x0 | 0x0 | Ki blasts | Flags | Flags 1 | bits:Unblockable,Can't Be Reflected,*,*,*,*,*,*
+kf01 | bits | 0x1 | 0x1 | Ki blasts | Flags | Flags 2 | bits:*,*,*,*,*,*,*,*
+
+[file 20]
+name = 020_movement_param.dat
+title = Movement
+step = 0x0 0x0
+items = 
+v00 | f32 | 0x0 | 0x0 | Movement | Speed | Long Range Movement Speed | 
+v04 | f32 | 0x4 | 0x4 | Movement | Speed | Long Range Movement Speed (Water) | 
+v08 | f32 | 0x8 | 0x8 | Movement | Speed | Close Range Movement Speed | 
+v0c | f32 | 0xC | 0xC | Movement | Speed | Close Range Movement Speed (Water) | 
+v10 | f32 | 0x10 | 0x10 | Movement | Speed | Dash Speed | 
+v14 | f32 | 0x14 | 0x14 | Movement | Speed | Dash Speed (Water) | 
+v18 | f32 | 0x18 | 0x18 | Movement | Speed | Dragon Dash Speed (Chase) | 
+v1c | f32 | 0x1C | 0x1C | Movement | Speed | Dragon Dash Speed (Freely) | 
+v20 | f32 | 0x20 | 0x20 | Movement | Speed | Vertical Dragon Dash Speed (Freely) | 
+v24 | f32 | 0x24 | 0x24 | Movement | Speed | Vertical Dragon Flight Speed | 
+v28 | f32 | 0x28 | 0x28 | Movement | Speed | Rush-In Distance | 
+v2c | f32 | 0x2C | 0x2C | Movement | Speed | Back step Distance | 
+v30 | f32 | 0x30 | 0x30 | Movement | Speed | Side step Distance | 
+v34 | f32 | 0x34 | 0x34 | Movement | Speed | Jump Distance | 
+v38 | f32 | 0x38 | 0x38 | - | Speed | * (0x38) | 
+v3c | f32 | 0x3C | 0x3C | - | Speed | * (0x3C) | 
+v40 | f32 | 0x40 | 0x40 | Movement | Speed | Ascending Flight Speed | 
+v44 | f32 | 0x44 | 0x44 | Movement | Speed | Descending Flight Speed | 
+v48 | f32 | 0x48 | 0x48 | Movement | Speed | High Speed Rush Movement Distance | 
+v4c | f32 | 0x4C | 0x4C | Movement | Speed | Z-Burst Dash Speed | 
+v50 | f32 | 0x50 | 0x50 | Movement | Swimming | Ascending Flight Speed (Water) | 
+v54 | f32 | 0x54 | 0x54 | Movement | Swimming | Descending Flight Speed (Water) | 
+v58 | f32 | 0x58 | 0x58 | Movement | Range | Dragon Homing Range | 
+v5c | f32 | 0x5C | 0x5C | Movement | Jump | Jump Height | 
+v60 | f32 | 0x60 | 0x60 | Movement | Jump | Jump Distance (Dashing) | 
+v64 | s32 | 0x64 | 0x64 | Movement | Ki consumption | Dragon Dash Ki Consumption (Chase) | 
+v68 | s32 | 0x68 | 0x68 | Movement | Ki consumption | Dragon Dash Ki Consumption (Freely) | 
+v6c | s32 | 0x6C | 0x6C | Movement | Ki consumption | Dragon Flight Ki Consumption | 
+v70 | s32 | 0x70 | 0x70 | Movement | Ki consumption | Z-Burst Dash Ki Consumption | 
+v74 | f32 | 0x74 | 0x74 | Movement | Redirection | Redirection Dash Speed | 
+v78 | f32 | 0x78 | 0x78 | Movement | Redirection | Redirection Movement Speed While Jump | 
+v7c | f32 | 0x7C | 0x7C | Movement | Redirection | Redirection Dragon Dash Speed (Freely) | 
+v80 | f32 | 0x80 | 0x80 | - | Other | * (0x80) | 
+v84 | f32 | 0x84 | 0x84 | - | Other | * (0x84) | 
+v88 | f32 | 0x88 | 0x88 | - | Other | * (0x88) | 
+v8c | f32 | 0x8C | 0x8C | - | Other | * (0x8C) | 
+v90 | f32 | 0x90 | 0x90 | Movement | Chase range | Horizontal Dragon Dash Range (Chase) | 
+v94 | f32 | 0x94 | 0x94 | Movement | Chase range | Vertical Dragon Dash Range (Chase) | 
+v98 | f32 | 0x98 | 0x98 | - | Chase range | * (0x98) | 
+v9c | f32 | 0x9C | 0x9C | - | Chase range | * (0x9C) | 
+
+[file 21]
+name = 021_voice_speaker.dat
+title = Intros and victories
+item = Opponent
+step = 0x4 0x4
+items = @characters
+vs_intro | u8 | 0x0 | 0x0 | Intros and victories | Intro | Intro line (255 = none) | 
+vs_first | check | 0x1 | 0x1 | Intros and victories | Intro | Opponent talks first | check:1
+vs_win | u8 | 0x2 | 0x2 | Intros and victories | Victory | Victory line (255 = none) | 
+vs_win_first | check | 0x3 | 0x3 | - | Victory | Opponent talks first (unused) | check:1
+
+[file 23]
+name = 023_blast_param.dat
+title = Super attacks
+item = Attack
+step = 0x0 0x0
+items = Super attack 1, Super attack 2, Ultimate attack
+a13e | list | 0x13E | 0x13E | Super attacks | General | Attack Type | step=1;list:Energy - Normal (Type 1)=0,Energy - Normal (Type 2)=1,Energy - Chargeable (Type 1)=2,Energy - Chargeable (Type 2)=3,Rush - Normal (Type 1)=4,Rush - Normal (Type 2)=5,Rush - No Movement=6,Energy - Rush=7,Assault=8,Energy - Teleport=9,Throw=10,Unused=11,-=255
+a09c | hits | 0x9C | 0x9C | Super attacks | General | Hits | step=1
+a093 | min1 | 0x93 | 0x93 | Super attacks | General | Hits Damage Divider | step=1
+a096 | min1 | 0x96 | 0x96 | Super attacks | General | Energy Hits Damage Divider | step=1
+a184 | s32 | 0x184 | 0x184 | Super attacks | General | Damage | step=4
+a190 | s32 | 0x190 | 0x190 | Super attacks | General | Damage (Blocking) | step=4
+a19c | s32 | 0x19C | 0x19C | Super attacks | General | Ki Consumption | step=4
+a1a8 | s32 | 0x1A8 | 0x1A8 | Super attacks | General | Health Consumption | step=4
+a1b4 | s32 | 0x1B4 | 0x1B4 | Super attacks | General | Health Absorption | step=4
+a054 | f32 | 0x54 | 0x54 | Super attacks | Energy | Energy Speed | step=4
+a060 | f32 | 0x60 | 0x60 | Super attacks | Energy | Energy Separation | step=4
+a06c | f32 | 0x6C | 0x6C | Super attacks | Energy | Size | step=4
+a078 | f32 | 0x78 | 0x78 | Super attacks | Energy | Size on Impact (Enemy) | step=4
+a084 | f32 | 0x84 | 0x84 | Super attacks | Energy | Size on Impact (Map) | step=4
+a09f | u8 | 0x9F | 0x9F | Super attacks | Energy | Collision Speed | step=1
+a0a2 | u8 | 0xA2 | 0xA2 | Super attacks | Energy | Explosion Effect (Enemy) | step=1
+a0a5 | u8 | 0xA5 | 0xA5 | Super attacks | Energy | Explosion Effect (Map) | step=1
+a01e | s16 | 0x1E | 0x1E | Super attacks | Energy | Clash Effort | step=2
+a14d | list | 0x14D | 0x14D | Super attacks | Rush | Fall Type (Enemy) | step=1;list:00=0,01=1,02=2,03=3,04=4,05=5,06=6,07=7,08=8,09=9,0A=10,0B=11,0C=12,0D=13,0E=14,0F=15,10=16,11=17,12=18,13=19,14=20,15=21,FF=255
+a024 | f32 | 0x24 | 0x24 | Super attacks | Rush | Rush Distance | step=4
+a1fc | f32 | 0x1FC | 0x1FC | Super attacks | Rush | Rush Speed | step=4
+a159 | list | 0x159 | 0x159 | Super attacks | Rush | Animation Amount | step=1;list:00=0,01=1,02=2,03=3,04=4,05=5
+a220 | list | 0x220 | 0x220 | Super attacks | Rush | At Animation | step=1;list:00=0,01=1,02=2,03=3,04=4,05=5,FE=254
+a018 | s16 | 0x18 | 0x18 | Super attacks | Other | MAGIC Word | step=2
+a030 | f32 | 0x30 | 0x30 | - | Other | * (0x30) | step=4
+a03c | f32 | 0x3C | 0x3C | - | Other | * (0x3C) | step=4
+a048 | f32 | 0x48 | 0x48 | - | Other | * (0x48) | step=4
+a090 | u8 | 0x90 | 0x90 | - | Other | * (0x90) Unused | step=1
+a099 | u8 | 0x99 | 0x99 | - | Other | * (0x99) | step=1
+a0a8 | u8 | 0xA8 | 0xA8 | - | Other | * (0xA8) | step=1
+a0ab | u8 | 0xAB | 0xAB | - | Other | * (0xAB) | step=1
+a0ae | u8 | 0xAE | 0xAE | - | Other | * (0xAE) | step=1
+a0b1 | u8 | 0xB1 | 0xB1 | - | Other | * (0xB1) | step=1
+a0b4 | u8 | 0xB4 | 0xB4 | - | Other | * (0xB4) | step=1
+a0b7 | u8 | 0xB7 | 0xB7 | - | Other | * (0xB7) | step=1
+a0ba | u8 | 0xBA | 0xBA | - | Other | * (0xBA) | step=1
+a0bd | u8 | 0xBD | 0xBD | - | Other | * (0xBD) | step=1
+a0c0 | u8 | 0xC0 | 0xC0 | - | Other | * (0xC0) | step=1
+a0c3 | u8 | 0xC3 | 0xC3 | - | Other | * (0xC3) | step=1
+a0c6 | u8 | 0xC6 | 0xC6 | - | Other | * (0xC6) | step=1
+a0c9 | u8 | 0xC9 | 0xC9 | - | Other | * (0xC9) | step=1
+a0cc | u8 | 0xCC | 0xCC | - | Other | * (0xCC) | step=1
+a0cf | u8 | 0xCF | 0xCF | - | Other | * (0xCF) | step=1
+a0d4 | f32 | 0xD4 | 0xD4 | - | Other | * (0xD4) | step=4
+a0e0 | f32 | 0xE0 | 0xE0 | - | Other | * (0xE0) | step=4
+a0ec | f32 | 0xEC | 0xEC | - | Other | * (0xEC) | step=4
+a0f8 | f32 | 0xF8 | 0xF8 | - | Other | * (0xF8) | step=4
+a104 | f32 | 0x104 | 0x104 | - | Other | * (0x104) | step=4
+a110 | f32 | 0x110 | 0x110 | - | Other | * (0x110) | step=4
+a11c | f32 | 0x11C | 0x11C | - | Other | * (0x11C) | step=4
+a128 | f32 | 0x128 | 0x128 | - | Other | * (0x128) | step=4
+a138 | u8 | 0x138 | 0x138 | - | Other | * (0x138) | step=1
+a13b | u8 | 0x13B | 0x13B | - | Other | * (0x13B) | step=1
+a141 | u8 | 0x141 | 0x141 | - | Other | * (0x141) | step=1
+a144 | u8 | 0x144 | 0x144 | - | Other | * (0x144) | step=1
+a147 | u8 | 0x147 | 0x147 | - | Other | * (0x147) | step=1
+a14a | u8 | 0x14A | 0x14A | - | Other | * (0x14A) | step=1
+a150 | u8 | 0x150 | 0x150 | - | Other | * (0x150) | step=1
+a153 | u8 | 0x153 | 0x153 | - | Other | * (0x153) | step=1
+a156 | u8 | 0x156 | 0x156 | - | Other | * (0x156) | step=1
+a15c | u8 | 0x15C | 0x15C | - | Other | * (0x15C) | step=1
+a15f | u8 | 0x15F | 0x15F | - | Other | * (0x15F) | step=1
+a162 | u8 | 0x162 | 0x162 | - | Other | * (0x162) | step=1
+a165 | u8 | 0x165 | 0x165 | - | Other | * (0x165) | step=1
+a168 | u8 | 0x168 | 0x168 | - | Other | * (0x168) | step=1
+a16c | f32 | 0x16C | 0x16C | - | Other | * (0x16C) | step=4
+a178 | f32 | 0x178 | 0x178 | - | Other | * (0x178) | step=4
+a1c0 | f32 | 0x1C0 | 0x1C0 | - | Other | * (0x1C0) | step=4
+a1cc | f32 | 0x1CC | 0x1CC | - | Other | * (0x1CC) | step=4
+a1d8 | f32 | 0x1D8 | 0x1D8 | - | Other | * (0x1D8) | step=4
+a1e4 | f32 | 0x1E4 | 0x1E4 | - | Other | * (0x1E4) | step=4
+a1f0 | f32 | 0x1F0 | 0x1F0 | - | Other | * (0x1F0) (Enemy Fall Angle?) | step=4
+a214 | f32 | 0x214 | 0x214 | - | Other | * (0x214) | step=4
+a223 | u8 | 0x223 | 0x223 | - | Other | * (0x223) | step=1
+a226 | u8 | 0x226 | 0x226 | - | Other | * (0x226) | step=1
+a229 | u8 | 0x229 | 0x229 | - | Other | Stick Direction? (1=Up, 2=Down, 11=Right, 12=Left) | step=1
+a22c | f32 | 0x22C | 0x22C | - | Other | * (0x22C) | step=4
+a238 | f32 | 0x238 | 0x238 | - | Other | * (0x238) | step=4
+af00 | bits | 0x0 | 0x0 | Super attacks | Flags | Flags 0x00 | step=4;bits:*,*,*,*,*,Tresspasses the Opponent,*,*
+af01 | bits | 0x1 | 0x1 | Super attacks | Flags | Flags 0x01 | step=4;bits:Cannot Beam Clash,*,*,*,*,Centered Effect,*,*
+af02 | bits | 0x2 | 0x2 | Super attacks | Flags | Flags 0x02 | step=4;bits:*,*,*,*,*,Destroys Planet (Beam),*,*
+af03 | bits | 0x3 | 0x3 | Super attacks | Flags | Flags 0x03 | step=4;bits:*,Disintegrates Opponent,VFX Attached to Body Point?,*,*,*,*,Background doesn't Darken
+af0c | bits | 0xC | 0xC | Super attacks | Flags | Flags 0x0C | step=4;bits:Unblockable,*,*,*,Energetic Type,*,*,*
+af0d | bits | 0xD | 0xD | Super attacks | Flags | Flags 0x0D | step=4;bits:*,*,Random Damage,Reset Position at Finish,Use Front Animations,Costume Damage (User),Falls to the Ground,Kaioken Effect
+af0e | bits | 0xE | 0xE | Super attacks | Flags | Flags 0x0E | step=4;bits:*,Attack Minigame (TTT),*,Costume Damage (Enemy),*,*,*,*
+af0f | bits | 0xF | 0xF | Super attacks | Flags | Flags 0x0F | step=4;bits:*,*,*,Affect Giants,Character in Air at the End,*,Relative Costume Invoke,*
+ap208 | list16 | 0x208 | - | Super attacks | Partner | Partner | step=2;list:None=65535,@chars,Goku End SS3 Dragon=256,Goku GT SS4 Dragon=257,Pan Giru=258,Gotenks SS Ghost=259,Super Buu Gohan Ghost=260,Pilaf Robots Skin 1=261,Pilaf Robots Skin 2=262,Small Rock=263,Big Rock=264,Guldo Trunk=265,General Trunk=266,Teen Gohan SS2 Goku=267,Tao Grenade=268,Satan Gift=269,General Missile=270,Pilaf Missile=271,Android 16 Hand Skin 1=272,Android 16 Hand Skin 2=273,Chocolate=274,Babidi Yakon=275,Babidi Puipui=276,King Piccolo Drum=277,Arale Gatchan=278,General Helicopter=279,Devilman Trident=280,Cell Bomb Skin 1=281,Cell Bomb Skin 2=282,Spopovich Yamu=283,Goku GT Dragon=284,Milk Helmet=285,Goku GT SS3 Dragon=286,Goku Kid Ozaru=287,Dragon Shenron=288,Dragon Porunga=289,Dragon Ball 1=290,Dragon Ball 2=291,Dragon Ball 3=292,Dragon Ball 4=293,Dragon Ball 5=294,Dragon Ball 6=295,Dragon Ball 7=296,Dragon Shenron GT=297,Dragon Balls=298,Dragon Balls GT=299
+apt208 | list16 | - | 0x208 | Super attacks | Partner | Partner | step=2;list:Goku End SS3 Dragon=256,Gotenks SS Ghost=259,Super Bu Gohan Ghost=260,Small Rock=263,Big Rock=264,Guldo Trunk=265,Gohan SS2 Goku=267,Android 16 Hand=272,Chocolate=274,Cell Bomb C1=281,Cell Bomb C2=282,Goku End=28,Android 17=101,Android 18=102,Burter=88,Jeice=89,Piccolo End C2=23,Gohan SS2=18,Goku End Fusion=3,Vegeta End Fusion=34,Goten Fusion=46,Goten SS Fusion=47,Trunks Kid Fusion=44,Trunks Kid SS Fusion=45,None=65535
+ap20e | list16 | 0x20E | - | Super attacks | Partner | Partner 2nd Costume | step=2;list:None=65535,@chars,Goku End SS3 Dragon=256,Goku GT SS4 Dragon=257,Pan Giru=258,Gotenks SS Ghost=259,Super Buu Gohan Ghost=260,Pilaf Robots Skin 1=261,Pilaf Robots Skin 2=262,Small Rock=263,Big Rock=264,Guldo Trunk=265,General Trunk=266,Teen Gohan SS2 Goku=267,Tao Grenade=268,Satan Gift=269,General Missile=270,Pilaf Missile=271,Android 16 Hand Skin 1=272,Android 16 Hand Skin 2=273,Chocolate=274,Babidi Yakon=275,Babidi Puipui=276,King Piccolo Drum=277,Arale Gatchan=278,General Helicopter=279,Devilman Trident=280,Cell Bomb Skin 1=281,Cell Bomb Skin 2=282,Spopovich Yamu=283,Goku GT Dragon=284,Milk Helmet=285,Goku GT SS3 Dragon=286,Goku Kid Ozaru=287,Dragon Shenron=288,Dragon Porunga=289,Dragon Ball 1=290,Dragon Ball 2=291,Dragon Ball 3=292,Dragon Ball 4=293,Dragon Ball 5=294,Dragon Ball 6=295,Dragon Ball 7=296,Dragon Shenron GT=297,Dragon Balls=298,Dragon Balls GT=299
+apt20e | list16 | - | 0x20E | Super attacks | Partner | Partner 2nd Costume | step=2;list:Goku End SS3 Dragon=256,Gotenks SS Ghost=259,Super Bu Gohan Ghost=260,Small Rock=263,Big Rock=264,Guldo Trunk=265,Gohan SS2 Goku=267,Android 16 Hand=272,Chocolate=274,Cell Bomb C1=281,Cell Bomb C2=282,Goku End=28,Android 17=101,Android 18=102,Burter=88,Jeice=89,Piccolo End C2=23,Gohan SS2=18,Goku End Fusion=3,Vegeta End Fusion=34,Goten Fusion=46,Goten SS Fusion=47,Trunks Kid Fusion=44,Trunks Kid SS Fusion=45,None=65535
+
+[file 24]
+name = 024_skill_param.dat
+title = Skills
+item = Skill
+step = 0x0 0x0
+items = Skill 1, Skill 2
+s010 | s16 | 0x10 | 0x10 | - | General | Type* (Magic Value) | step=2
+s094 | u8 | 0x94 | 0x94 | Skills | General | Blast Units Consumption | step=1
+s030 | f32 | 0x30 | 0x30 | Skills | General | Effect Size | step=4
+s054 | u8 | 0x54 | 0x54 | Skills | General | 1st VFX Time | step=1
+s056 | u8 | 0x56 | 0x56 | Skills | General | 2nd VFX Time | step=1
+s058 | u8 | 0x58 | 0x58 | Skills | General | 3rd VFX Time | step=1
+s064 | list | 0x64 | 0x64 | Skills | General | Animation | step=1;list:Standard=0,Teleport=1,No Animation=2,Unknown=3
+s0a0 | f32 | 0xA0 | 0xA0 | Skills | General | Skill Effect Lifespan Time | step=4
+s028 | f32 | 0x28 | 0x28 | Skills | General | Skill Lifespan | step=4
+s014 | s16 | 0x14 | 0x14 | - | General | * (0x14) | step=2
+s018 | f32 | 0x18 | 0x18 | - | General | * (0x18) | step=4
+s038 | u8 | 0x38 | 0x38 | - | General | * (0x38) (Unused?) | step=1
+s03e | u8 | 0x3E | 0x3E | - | General | * (0x3E) | step=1
+s05a | u8 | 0x5A | 0x5A | - | General | * (0x5A) | step=1
+s05c | u8 | 0x5C | 0x5C | - | General | * (0x5C) | step=1
+s05e | u8 | 0x5E | 0x5E | - | General | * (0x5E) | step=1
+s060 | u8 | 0x60 | 0x60 | - | General | * (0x60) | step=1
+s062 | u8 | 0x62 | 0x62 | - | General | * (0x62) | step=1
+s066 | list | 0x66 | 0x66 | Skills | Stat bonuses | Duration of Stat Buffs | step=1;list:Permanent (?)=0,Timed (Skill Effect Lifespan Time)=1,Until Blast 2/Ultimate Blast is used=2,Until Max Power Mode wears off=3,Until Kaioken wears off=4
+s096 | s8 | 0x96 | 0x96 | Skills | Stat bonuses | Atk | step=1
+s09a | s8 | 0x9A | 0x9A | Skills | Stat bonuses | Def | step=1
+s098 | s8 | 0x98 | 0x98 | Skills | Stat bonuses | Ki | step=1
+s09c | s8 | 0x9C | 0x9C | Skills | Stat bonuses | Super | step=1
+s020 | f32 | 0x20 | 0x20 | Skills | Stat bonuses | Stun Effect | step=4
+s0a8 | s32 | 0xA8 | 0xA8 | - | Stat bonuses | HP Modifier [(Character Base HP * X) / 100] | step=4
+s0b0 | s32 | 0xB0 | 0xB0 | Skills | Stat bonuses | Ki Modifier | step=4
+s042 | u8 | 0x42 | 0x42 | - | Opponent | Hits (0x42) | step=1
+s084 | s32 | 0x84 | 0x84 | Skills | Opponent | Damage | step=4
+s08c | s32 | 0x8C | 0x8C | Skills | Opponent | Damage (Guard) | step=4
+s040 | hits | 0x40 | 0x40 | Skills | Opponent | Hits | step=1
+s03a | min1 | 0x3A | 0x3A | Skills | Opponent | Hits Damage Divisor | step=1
+s03c | min1 | 0x3C | 0x3C | Skills | Opponent | Energy Hits Damage Divisor | step=1
+s068 | u8 | 0x68 | 0x68 | Skills | Opponent | Effect on Opponent 1 | step=1
+s06a | u8 | 0x6A | 0x6A | Skills | Opponent | Effect on Opponent 2 | step=1
+s074 | f32 | 0x74 | 0x74 | Skills | Opponent | Knockback | step=4
+s044 | u8 | 0x44 | 0x44 | - | Other | * (0x44) | step=1
+s046 | u8 | 0x46 | 0x46 | - | Other | * (0x46) | step=1
+s048 | u8 | 0x48 | 0x48 | - | Other | * (0x48) | step=1
+s04a | u8 | 0x4A | 0x4A | - | Other | * (0x4A) | step=1
+s04c | u8 | 0x4C | 0x4C | - | Other | * (0x4C) | step=1
+s04e | u8 | 0x4E | 0x4E | - | Other | * (0x4E) | step=1
+s050 | u8 | 0x50 | 0x50 | - | Other | * (0x50) | step=1
+s052 | u8 | 0x52 | 0x52 | - | Other | * (0x52) | step=1
+s06c | u8 | 0x6C | 0x6C | - | Other | * (0x6C) | step=1
+s09e | u8 | 0x9E | 0x9E | - | Other | * (0x9E) | step=1
+s0b8 | s32 | 0xB8 | 0xB8 | - | Other | * (0xB8) | step=4
+s0c0 | s32 | 0xC0 | 0xC0 | - | Other | * (0xC0) | step=4
+sf08 | bits | 0x8 | 0x8 | Skills | Flags | Flags 0x08 | step=4;bits:*,*,*,Usable while being hit,*,*,*,*
+sf09 | bits | 0x9 | 0x9 | Skills | Flags | Flags 0x09 | step=4;bits:Effects Stack,MAX Power Mode,Strong Armor,Armor,*,*,*,*
+sf00 | bits | 0x0 | 0x0 | Skills | Flags | Flags 0x00 | step=4;bits:*,*,*,*,*,*,*,*
+sf01 | bits | 0x1 | 0x1 | Skills | Flags | Flags 0x01 | step=4;bits:*,*,*,*,*,*,*,*
+sf0a | bits | 0xA | 0xA | Skills | Flags | Flags 0x0A | step=4;bits:*,*,Focus Camera on User,*,*,Unblockable,*,Reduced Ki charge after usage
+sf0b | bits | 0xB | 0xB | Skills | Flags | Flags 0x0B | step=4;bits:Invulnerability to Melee,Invulnerability to Rush Blast,Invulnerability to Blast 2,Invulnerability to Stun Moves,*,*,*,*
+sf02 | bits | 0x2 | 0x2 | Skills | Flags | Flags 0x02 | step=4;bits:*,*,*,*,*,*,*,*
+sf03 | bits | 0x3 | 0x3 | Skills | Flags | Flags 0x03 | step=4;bits:*,*,*,*,*,*,*,*
+
+[file 27]
+name = 027_camera_param.dat
+title = Cameras
+item = Camera
+step = 0x24 0x24
+items = First Super Attack, Second Super Attack, Ultimate Attack, Ultimate Attack (Start), Transformation (1st), Transformation (2nd), Transformation Completed, Throw (1st), Throw (2nd), Super Attack (Close Up)
+c04 | f32 | 0x4 | 0x4 | Cameras | Movement | X Start | 
+c08 | f32 | 0x8 | 0x8 | Cameras | Movement | X End | 
+c14 | f32 | 0x14 | 0x14 | Cameras | Movement | Z Start | 
+c18 | f32 | 0x18 | 0x18 | Cameras | Movement | Z End | 
+c0c | f32 | 0xC | 0xC | Cameras | Movement | Y Start | 
+c10 | f32 | 0x10 | 0x10 | Cameras | Movement | Y End | 
+c1c | f32 | 0x1C | 0x1C | Cameras | Movement | Time | 
+c00 | u8 | 0x0 | 0x0 | Cameras | Bones | Camera Bone 1 | 
+c01 | u8 | 0x1 | 0x1 | Cameras | Bones | Camera Bone 2 | 
+c02 | u8 | 0x2 | 0x2 | Cameras | Bones | Focus Bone 1 | 
+c03 | u8 | 0x3 | 0x3 | Cameras | Bones | Focus Bone 2 | 
+c20 | s16 | 0x20 | 0x20 | Cameras | Bones | Interpolation | 
+c22 | s16 | 0x22 | 0x22 | Cameras | Bones | Focus | 
+
+[list moves]
+Rush Attack 1 (First Combo)
+Rush Attack 1 (First Combo) (Second Strike)
+Rush Attack 2 (First Combo)
+Rush Attack 3 (First Combo)
+Rush Attack 4 (First Combo)
+Rush Attack 5 (First Combo)
+Rush Attack 1 (Second Combo)
+Rush Attack 2 (Second Combo)
+Rush Attack 3 (Second Combo)
+Rush Attack 4 (Second Combo)
+Rush Attack 5 (Second Combo)
+Heavy Finish (Short)
+Heavy Finish (Medium)
+Heavy Finish (Strong)
+Heavy Crush 1
+Heavy Crush 2
+Heavy Crush 3
+Flying Kick 1
+Flying Kick 2
+Charged Left Strike (Short)
+Charged Right Strike (Short)
+Charged Up Strike (Short)
+Charged Down Strike (Short)
+Charged Neutral Strike (Short)
+Charged Left Strike (Medium)
+Charged Right Strike (Medium)
+Charged Up Strike (Medium)
+Charged Down Strike (Medium)
+Charged Neutral Strike (Medium)
+Charged Left Strike (Strong)
+Charged Right Strike (Strong)
+Charged Up Strike (Strong)
+Charged Down Strike (Strong)
+Charged Neutral Strike (Strong)
+Dash Smash 1 (Short)
+Dash Smash 2 (Short)
+Dash Smash 1 (Medium)
+Dash Smash 2 (Medium)
+Dash Smash 1 (Strong)
+Dash Smash 2 (Strong)
+Jump Strike 1 (Short)
+Jump Strike 2 (Short)
+Jump Strike 1 (Medium)
+Jump Strike 2 (Medium)
+Jump Strike 1 (Strong)
+Jump Strike 2 (Strong)
+Kiai Cannon (Short)
+Kiai Cannon (Medium)
+Kiai Cannon (Strong)
+Blaster Wave (Short)
+Blaster Wave (Medium)
+Blaster Wave (Strong)
+First Dragon Smash Left (Short)
+First Dragon Smash Right (Short)
+First Dragon Smash Up (Short)
+First Dragon Smash Down (Short)
+First Dragon Smash Neutral (Short)
+First Dragon Smash Left (Strong)
+First Dragon Smash Right (Strong)
+First Dragon Smash Up (Strong)
+First Dragon Smash Down (Strong)
+First Dragon Smash Neutral (Strong)
+Second Dragon Smash Left (Strong)
+Second Dragon Smash Right (Strong)
+Second Dragon Smash Up (Strong)
+Second Dragon Smash Down (Strong)
+Second Dragon Smash Neutral (Strong)
+Vanishing Attack Left
+Vanishing Attack Right
+Vanishing Attack Up
+Vanishing Attack Down
+Vanishing Attack Neutral (Unused)
+Lift Strike (Short)
+Lift Strike (Medium)
+Lift Strike (Strong)
+Ground Slash (Short)
+Ground Slash (Medium)
+Ground Slash (Strong)
+Air Combo 1
+Air Combo 2
+Air Combo 3
+Air Combo 4
+Air Combo 5
+Air Combo Finisher
+Air Combo Heavy Finisher
+Throw
+Giant Throw
+Body Strike
+Kiai Cannon Smash
+Rolling Hammer Left (Short)
+Rolling Hammer Right (Short)
+Rolling Hammer Left (Medium)
+Rolling Hammer Right (Medium)
+Rolling Hammer Left (Strong)
+Rolling Hammer Right (Strong)
+Sonic Impact 1
+Sonic Impact 2
+Wild Sense Down
+Wild Sense Up
+Dragon Tornado 1
+Dragon Tornado 2
+Dragon Tornado 3
+MAX Mode
+Hyper Smash Left
+Hyper Smash Rigt
+Hyper Smash Up
+Hyper Smash Down
+Hyper Smash Neutral
+Burst Meteor 1
+? (110)
+Rush Finish Up
+Rush Finish Finisher
+Rush Finish Down
+Delta Storm 1
+Delta Storm 2
+Blaster Wave Combo 1
+Blaster Wave Combo 2
+Z Counter Left
+Z Counter Rigt
+Z Counter Up
+Z Counter Down
+Rolling Hurricane Left
+Rolling Hurricane Right
+Rolling Hurricane Finisher
+Raging Impact 1
+Raging Impact 2
+Energy Wave 1 (Short)
+Energy Wave 2 (Short)
+Energy Wave 3 (Short)
+Energy Wave 1 (Medium)
+Energy Wave 2 (Medium)
+Energy Wave 3 (Medium)
+Energy Wave 1 (Strong)
+Energy Wave 2 (Strong)
+Energy Wave 3 (Strong)
+Rush In Attack Up
+Rush In Attack Down
+Rush In Attack Neutral
+Burst Meteor Finisher
+Burst Meteor 2
+Energy Storm (Short) 1
+Energy Storm (Short) 2
+Tri-Cannon Strike 1
+Tri-Cannon Strike 2
+Tri-Cannon Strike 3
+Power Press 1
+Power Press 2
+Lighting Attack
+Body Strike Heavy
+Body Strike Kiai
+Body Strike Blaster
+Body Strike Kick
+Energy Storm (Long) 1
+Energy Storm (Long) 2
+Dragon Tornado Blast Combo Followup
+Blaster Wave Blast Combo Followup
+Energy Storm (Short) Blast Combo Followup
+Energy Storm (Long) Blast Combo Followup
+Power Press Blast Combo Followup
+Rolling Hammer Blast Combo Followup
+Burst Meteor Blast Combo Followup
+Air Combo Blast Combo Followup
+Heavy Crush Blast Combo Followup
+? (164) (Unused)
+? (165) (Unused)
+? (166) (Unused)
+? (167) (Unused)
+? (168) (Unused)
+? (169) (Unused)
+? (170) (Unused)
+? (171) (Unused)
+? (172) (Unused)
+? (173) (Unused)
+? (174) (Unused)
+? (175) (Unused)
+? (176) (Unused)
+? (177) (Unused)
