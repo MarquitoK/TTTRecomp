@@ -8,6 +8,9 @@ struct PeOpt { std::wstring t; long long v; };
 struct PeField { std::string key; int file = 0, type = 0, off[2] = {-1, -1}, step = -1, copy = -1; long long chk = 1; std::string sec, grp; std::wstring label; std::vector<PeOpt> opt; std::vector<std::wstring> bit; };
 struct PeFile { int num = 0, step[2] = {0, 0}; bool by_char = false; std::string name; std::wstring title, item; std::vector<std::wstring> items; };
 struct PeSrc { int j = 0; std::vector<std::string> dirs; std::string out; };   // folders a color's 1_p is read from (first wins) and its path in the mod
+#include <mmsystem.h>
+std::string psp_voice_wav(int s, int n, int lang);
+std::string psp_voice_current();
 static std::vector<PeField> pe_f;
 static std::map<int, PeFile> pe_files;
 static std::map<std::string, int> pe_key;
@@ -268,12 +271,12 @@ static std::wstring pe_item_name(int file, int i) { PeFile& pf = pe_files[file];
 static std::wstring pe_char_name(long long v) { return v == 255 || v < 0 ? L"None" : v < roster::SYS ? mw_w(re_bt3_name((int)v)) : L"Id " + std::to_wstring(v); }
 
 // ---------------- card view (painted; menus, the character picker and an inline box for numbers) ----------------
-enum { EL_CARD, EL_LABEL, EL_NOTE, EL_CHAR, EL_LIST, EL_NUM, EL_TOGGLE, EL_SWATCH, EL_CHIP, EL_SLIDER, EL_EXPAND, EL_COST };
+enum { EL_CARD, EL_LABEL, EL_NOTE, EL_CHAR, EL_LIST, EL_NUM, EL_TOGGLE, EL_SWATCH, EL_CHIP, EL_SLIDER, EL_EXPAND, EL_COST, EL_PLAY };
 struct PeEl { int kind = 0, x = 0, y = 0, w = 0, h = 0, field = -1, item = 0, bit = -1, tag = 0; double lo = 0, hi = 0; std::wstring t, hint; bool on = false; };
 static std::vector<PeEl> pe_els;
 static std::vector<int> pe_card_y;   // y of each card (jump buttons)
 static HWND pe_view = nullptr, pe_box = nullptr;
-static int pe_hot = -1, pe_drag = -1, pe_scroll = 0, pe_content = 0, pe_box_el = -1, pe_attack = 0, pe_rival = 0, pe_adv_file = 17, pe_adv_item = 0;
+static int pe_hot = -1, pe_drag = -1, pe_scroll = 0, pe_content = 0, pe_box_el = -1, pe_attack = 0, pe_rival = 0, pe_adv_file = 17, pe_adv_item = 0, pe_vlang = -1;
 static bool pe_more_tf = false, pe_more_fu = false, pe_adv_open = false, pe_tracking = false;
 static const wchar_t* PE_CARDS[7] = {L"Transformations", L"Fusions", L"Aura", L"Attacks", L"Movement", L"Interactions", L"Advanced"};
 static const COLORREF PE_AURA[11] = {RGB(241, 239, 232), RGB(127, 119, 221), RGB(239, 159, 39), RGB(226, 75, 74), RGB(99, 153, 34), RGB(55, 138, 221), RGB(212, 83, 126), RGB(43, 79, 176), RGB(245, 208, 74), RGB(232, 183, 48), RGB(192, 57, 43)};
@@ -468,9 +471,30 @@ static void pe_layout() {
             if (x + w > PE_W - 14) { x = 18; pe_y += 34; }
             PeEl& add = pe_add(EL_CHIP, x, pe_y, w, 28, L"+ Other rival"); add.tag = 210;
             pe_y += 42;
+            std::vector<std::string> vn, vi;
+            psp_voice_packs(&vn, &vi, 0);
+            if (pe_vlang < 0 || pe_vlang > (int)vn.size()) { pe_vlang = 0; std::string cur = psp_voice_current(); for (size_t k = 0; k < vi.size(); k++) if (vi[k] == cur) pe_vlang = (int)k + 1; }
+            if (!vn.empty()) {
+                pe_add(EL_LABEL, 18, pe_y, 170, 28, L"Voice language");
+                int vx = 196;
+                for (int k = 0; k <= (int)vn.size(); k++) {
+                    std::wstring t = k ? mw_w(vn[k - 1]) : L"Game";
+                    int w = 26 + (int)t.size() * 7;
+                    PeEl& c = pe_add(EL_CHIP, vx, pe_y, w, 28, t); c.tag = 22; c.item = k; c.on = k == pe_vlang;
+                    vx += w + 8;
+                }
+                pe_y += 38;
+            }
+            int ry = pe_y;
             pe_row(L"Intro line", fi, pe_rival, EL_NUM, 88);
-            pe_toggles({{"vs_first", 0, L"Rival talks first"}}, pe_rival);
+            if (pe_y > ry) {
+                pe_add(EL_PLAY, 292, ry + 1, 34, 26, L"", fi, pe_rival);
+                int ft = pe_fk("vs_first");
+                if (ft >= 0 && pe_fits(pe_f[ft], pe_rival)) { PeEl& t = pe_add(EL_TOGGLE, 344, ry + 1, 34 + 17 * 7, 26, L"Rival talks first", ft, pe_rival); t.bit = 0; }
+            }
+            ry = pe_y;
             pe_row(L"Victory line", fw, pe_rival, EL_NUM, 88);
+            if (pe_y > ry) pe_add(EL_PLAY, 292, ry + 1, 34, 26, L"", fw, pe_rival);
         } else { pe_add(EL_NOTE, 18, pe_y, 600, 26, L"This character has no interactions file."); pe_y += 32; }
     }
     pe_card_end();
@@ -605,6 +629,12 @@ static void pe_paint(HDC dc, RECT cr) {
                 SelectObject(dc, ob); SelectObject(dc, op); DeleteObject(br); DeleteObject(p);
                 break;
             }
+            case EL_PLAY: {
+                bool none = pe_get(*f, e.item) == 255;
+                pe_round(dc, x, y, w, h, E(10), hot && !none ? PE_PILL_HOT : PE_PILL, hot && !none ? THEME_ACCENT : THEME_BORDER);
+                pe_text(dc, L"\x25B6", r, none ? THEME_TEXT2 : THEME_TEXT, theme_f_normal, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+                break;
+            }
             case EL_CHIP: {
                 pe_round(dc, x, y, w, h, E(14), e.on ? THEME_ACCENT : hot ? PE_PILL_HOT : PE_PILL, e.on ? THEME_ACCENT : THEME_BORDER);
                 pe_text(dc, e.t, r, e.on ? RGB(24, 18, 8) : THEME_TEXT, e.on ? theme_f_bold : theme_f_normal, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
@@ -705,36 +735,36 @@ static void pe_menu_list(int i, POINT p) {
     else pe_put(pe_f[e.field], e.item, (uint32_t)v);
     pe_changed_now();
 }
-static int pe_pick_char(const std::wstring& title, long long cur, POINT p) {   // -1 cancelled
-    HMENU m = CreatePopupMenu(), by = CreatePopupMenu();
-    AppendMenuW(m, MF_STRING, 1, L"Choose a character...");
-    AppendMenuW(m, MF_STRING | (cur == 255 ? MF_CHECKED : 0), 2, L"None");
-    for (int g = 0; g < roster::SYS; g += 20) {
-        HMENU sub = CreatePopupMenu();
-        for (int k = g; k < std::min(g + 20, roster::SYS); k++) AppendMenuW(sub, MF_STRING | (k == cur ? MF_CHECKED : 0), 100 + k, (std::to_wstring(k) + L"   " + pe_char_name(k)).c_str());
-        AppendMenuW(by, MF_POPUP, (UINT_PTR)sub, (std::to_wstring(g) + L" to " + std::to_wstring(std::min(g + 19, roster::SYS - 1))).c_str());
-    }
-    AppendMenuW(m, MF_POPUP, (UINT_PTR)by, L"By BT3 id");
-    int r = TrackPopupMenu(m, TPM_RETURNCMD | TPM_LEFTALIGN | TPM_TOPALIGN, p.x, p.y, 0, pe_view, nullptr);
-    DestroyMenu(m);
-    if (r == 2) return 255;
-    if (r >= 100) return r - 100;
-    if (r != 1) return -1;
+static int pe_pick_char(const std::wstring& title, bool none = true) {   // the select screen's characters, None last; -1 cancelled, 255 None
     std::vector<int> v;
-    for (auto& c : re_chars) v.push_back(c.sysid);
-    for (int s : roster::VANILLA) v.push_back(s);
+    std::set<int> seen;
+    auto add = [&](int s) { if (s >= 0 && s < roster::SYS && seen.insert(s).second) v.push_back(s); };
+    for (auto& c : re_cells) for (int s : c) add(s);
+    for (auto& c : re_chars) add(c.sysid);
+    for (int s : roster::VANILLA) add(s);
+    if (none) v.push_back(RE_P_NONE);
     int s = re_picker(title, v);
+    if (s == RE_P_NONE) return 255;
     return s >= 0 && s < roster::SYS ? s : -1;
+}
+static void pe_play(const PeEl& e) {
+    long long v = pe_get(pe_f[e.field], e.item);
+    if (v == 255) { cm_notify(L"None: the game plays one of its generic lines"); return; }
+    std::string p = psp_voice_wav(pe_s, (int)v + 6, pe_vlang);
+    printf("roster: voz de prueba de %d, linea %lld, idioma %d: %s\n", pe_s, v, pe_vlang, p.empty() ? "sin archivo" : p.c_str());
+    if (p.empty()) { cm_notify(L"This line has no audio file in this language"); return; }
+    PlaySoundW(mw_w(p).c_str(), nullptr, SND_FILENAME | SND_ASYNC | SND_NODEFAULT);
 }
 static void pe_click(int i, POINT scr, int mx) {
     PeEl& e = pe_els[i];
     switch (e.kind) {
         case EL_CHAR: {
-            int s = pe_pick_char(L"Character", pe_get(pe_f[e.field], e.item), scr);
+            int s = pe_pick_char(L"Character");
             if (s >= 0) { pe_put(pe_f[e.field], e.item, (uint32_t)s); pe_changed_now(); }
             break;
         }
         case EL_LIST: case EL_COST: pe_menu_list(i, scr); break;
+        case EL_PLAY: pe_play(e); break;
         case EL_TOGGLE: {
             const PeField& x = pe_f[e.field];
             uint32_t v = (uint32_t)pe_get(x, e.item);
@@ -747,7 +777,8 @@ static void pe_click(int i, POINT scr, int mx) {
         case EL_CHIP:
             if (e.tag == 23) pe_attack = e.item;
             else if (e.tag == 21) pe_rival = e.item;
-            else if (e.tag == 210) { int s = pe_pick_char(L"Rival", -1, scr); if (s >= 0 && s < 255 && s < pe_items(21)) pe_rival = s; }
+            else if (e.tag == 22) pe_vlang = e.item;
+            else if (e.tag == 210) { int s = pe_pick_char(L"Rival", false); if (s >= 0 && s < 255 && s < pe_items(21)) pe_rival = s; }
             pe_changed_now();
             break;
         case EL_EXPAND:

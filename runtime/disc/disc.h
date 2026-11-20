@@ -6458,6 +6458,24 @@ std::string psp_original_path(int k, int kind) {
     size_t s = f.find_last_of('/');
     return s == std::string::npos ? "" : f.substr(0, s);
 }
+// wav of voice line n of character s: lang 0 the game's (or a mod's), k the voice pack k - 1; "" when there is none
+std::string psp_voice_wav(int s, int n, int lang) {
+    if (!disc_ready || n < 0 || n >= 126) return "";
+    int g = roster::group_vanilla(s), r = g < 0 ? roster::rank(s) : -1;
+    size_t i = g >= 0 ? 0x1159 + (size_t)g * 126 + (size_t)n : r >= 0 ? (size_t)roster::voice_entry(r) + (size_t)n : (size_t)-1;
+    if (i >= disc_pk.size()) return "";
+    std::string key = disc_pk[i].key.empty() ? disc_pk[i].fpath : disc_pk[i].key;
+    if (lang > 0) {
+        if (lang > (int)voice_packs.size()) return "";
+        auto& w = voice_packs[lang - 1].wav;
+        auto it = w.find(lower(key.substr(0, key.find_last_of('.'))) + ".wav");
+        return it == w.end() ? "" : it->second;
+    }
+    auto c = disc_containers.find(key);
+    if (c == disc_containers.end() || c->second.type != 5 || c->second.parts.empty() || at3_only.count((uint32_t)c->second.parts[0].id)) return "";
+    std::string p = mod_path(c->second.parts[0].fpath);
+    return is_file(p) ? p : "";
+}
 // character folder (Packfile-relative) of a character pak read at guest address pak: the folder of its group's SFX pak
 std::string psp_pak_char_dir(uint32_t pak) {
     int idx = -1;

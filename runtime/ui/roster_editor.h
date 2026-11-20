@@ -88,7 +88,7 @@ static void re_drop_mod(const std::string& v) {
     for (size_t a = 4; a < v.size();) { size_t b = v.find('\n', a); std::string p = v.substr(a, b == std::string::npos ? std::string::npos : b - a); re_gone.insert(re_norm(p)); re_gone.insert(re_norm(p + ".pak")); a = b == std::string::npos ? v.size() : b + 1; }
 }
 static int re_page = 0, re_spage = 0, re_pick_k = 0, re_pick_l = 0;   // re_spage: General or Labels in the Select screen page
-static const int RE_L_IMPORT = -20, RE_L_DEFAULT = -21, RE_L_NONE = -22;
+static const int RE_L_IMPORT = -20, RE_L_DEFAULT = -21, RE_L_NONE = -22, RE_P_NONE = -23;
 static int re_cur = -1, re_form = -1, re_pick_choice = -3;
 static bool re_layout_set = false, re_filling = false, re_ready = false, re_pick_open = false;
 static std::string re_mod_src, re_mod_root;
@@ -287,6 +287,7 @@ static void re_lab_bitmaps_drop() {
 static std::wstring re_lab_special(int v) {
     if (v == RE_L_IMPORT) return L"Import PNG...";
     if (v == RE_L_NONE) return L"Empty";
+    if (v == RE_P_NONE) return L"None";
     int s = re_selected();
     if (re_pick_k == 0 && re_find(s) && re_parent(s) >= 0) return L"Inherit from " + mw_w(re_label(re_parent(s)));
     return re_find(s) ? L"Default" : L"Game's own";
