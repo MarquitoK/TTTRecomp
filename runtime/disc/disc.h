@@ -1943,19 +1943,22 @@ static std::string at3_key_of(uint32_t id) { return id && id <= at3_reg.size() ?
 // each character voice gets a mouth level per 1/60 s (0 closed, 1 slightly open, 2 half, 3 open) from its wav the first time it plays;
 // a voice that starts playing belongs to the character folder of its key (Characters/<x>/Voices/...)
 struct LipTalk { uint32_t id; std::string dir; uint64_t t0, last; int64_t frames; };
+struct LipShout { uint32_t id; int slot; uint64_t t0; int64_t lp0, lp1; std::vector<uint8_t> lv; };   // a fighter shout (ki charge, transformation) by its slot of the fighter table; lp0..lp1 = loop in steps
+static std::vector<LipShout> lip_shouts;
+std::atomic<int> lip_shout_n{0};
 static std::map<uint32_t, std::vector<uint8_t>> lip_env;
 static std::vector<LipTalk> lip_talk;
 static std::mutex lip_mx;
 static std::map<uint32_t, int> lip_paks;   // guest address where a Characters/ entry was read -> PACKFILE entry
 
 static float lip_envf(const char* k, float def) { const char* e = getenv(k); return e && *e ? (float)atof(e) : def; }
-static void lip_analyze(At3Wav& w, std::vector<uint8_t>& lv) {
-    int64_t win = std::max<int64_t>(1, w.rate / 60), n = (int64_t)(w.frames / (uint64_t)win);
-    std::vector<float> rms((size_t)n, 0.0f);
+template <class F> static void lip_levels(F sample, int64_t frames, int rate, std::vector<uint8_t>& lv) {
+    int64_t win = std::max<int64_t>(1, rate / 60), n = frames / win;
+    std::vector<float> rms((size_t)std::max<int64_t>(n, 0), 0.0f);
     float peak = 0.0f;
     for (int64_t i = 0; i < n; i++) {
         double acc = 0;
-        for (int64_t j = 0; j < win; j++) { int32_t lr[2]; at3_frame(w, i * win + j, lr); double v = (lr[0] + lr[1]) * 0.5 / 32768.0; acc += v * v; }
+        for (int64_t j = 0; j < win; j++) { double v = sample(i * win + j); acc += v * v; }
         rms[(size_t)i] = (float)std::sqrt(acc / (double)win);
         peak = std::max(peak, rms[(size_t)i]);
     }
@@ -1980,6 +1983,20 @@ static void lip_analyze(At3Wav& w, std::vector<uint8_t>& lv) {
     }
     for (int64_t i = 1; i + 1 < n; i++)   // no single-frame flicker
         if (lv[(size_t)i - 1] == lv[(size_t)i + 1] && lv[(size_t)i] != lv[(size_t)i - 1] && lv[(size_t)i]) lv[(size_t)i] = lv[(size_t)i - 1];
+}
+
+static bool lip_shout(const std::string& name) { std::string l = lower(name); return l.find("ki_charg") != std::string::npos || l.find("transformation") != std::string::npos; }
+static void lip_shout_open(std::vector<uint8_t>& lv) {   // a shout keeps the mouth wide open while it sounds; gaps up to 0.2 s stay open
+    int last = -1000;
+    for (int i = 0; i < (int)lv.size(); i++) {
+        if (!lv[(size_t)i]) continue;
+        if (i - last <= 12) for (int j = std::max(0, last); j < i; j++) lv[(size_t)j] = 3;
+        lv[(size_t)i] = 3; last = i;
+    }
+}
+static void lip_analyze(At3Wav& w, std::vector<uint8_t>& lv) {
+    lip_levels([&](int64_t i) { int32_t lr[2]; at3_frame(w, i, lr); return (lr[0] + lr[1]) * 0.5 / 32768.0; }, (int64_t)w.frames, w.rate, lv);
+    if (lip_shout(w.key)) lip_shout_open(lv);
 }
 
 static size_t lip_wants(const std::string& key) {   // voice of a character: the folder length of its key, else npos
@@ -2088,6 +2105,77 @@ int psp_lip_dir(const std::string& dir) {
         return k < n ? env->second[k] : -1;
     }
     return -1;
+}
+
+// a fighter's shouts (ki charge, transformation) move the mouth like a voice. The fighter is the owner slot of the battle sound queue
+// entry that started the sound (EBOOT_TTT 113.1), so it works for sounds exposed as wav and for raw PSP ADPCM (BT3 sound paks)
+static void lip_shout_off(uint32_t id) {   // lip_mx held
+    lip_shouts.erase(std::remove_if(lip_shouts.begin(), lip_shouts.end(), [&](const LipShout& t) { return t.id == id; }), lip_shouts.end());
+    lip_shout_n = (int)lip_shouts.size();
+}
+void psp_lip_shout_off(uint32_t id) { if (!lip_shout_n) return; std::lock_guard<std::mutex> g(lip_mx); lip_shout_off(id); }
+static void lip_shout_on(uint32_t id, int slot, std::vector<uint8_t>&& lv, int64_t lp0, int64_t lp1, const char* what, int snd, int bank) {
+    lip_shout_open(lv);
+    std::lock_guard<std::mutex> g(lip_mx);
+    lip_shout_off(id);
+    static int logs = 0;
+    if (logs++ < 20) printf("lip: grito %s (sonido %d, banco %d) del luchador %d, %u pasos%s\n", what, snd, bank, slot, (unsigned)lv.size(), lp1 > lp0 ? ", en bucle" : "");
+    lip_shouts.push_back({id, slot, disc_us(), lp0, lp1, std::move(lv)});
+    lip_shout_n = (int)lip_shouts.size();
+}
+uint32_t psp_lip_sfx(int wav, bool loop, int slot, int snd, int bank) {
+    SfxWav* w = sfx_wav(wav);
+    if (!w || !w->n || !w->rate || !lip_shout(w->name) || strncasecmp(w->pak.c_str(), "characters/", 11)) return 0;
+    std::vector<uint8_t> lv;
+    const int16_t* pcm = w->pcm.data();
+    lip_levels([&](int64_t i) { return pcm[i] / 32768.0; }, w->n, w->rate, lv);
+    int64_t win = std::max(1, w->rate / 60), n = (int64_t)lv.size(), l0 = -1, l1 = -1;
+    if (loop) { bool lp = w->loop_end > w->loop_start; l0 = lp && w->loop_start > 0 ? std::min<int64_t>(n, w->loop_start / win) : 0; l1 = lp ? std::min<int64_t>(n, w->loop_end / win) : n; }
+    uint32_t id = 0x80000000u | (uint32_t)wav;
+    lip_shout_on(id, slot, std::move(lv), l0, l1, w->name.c_str(), snd, bank);
+    return id;
+}
+uint32_t psp_lip_raw(uint32_t addr, uint32_t size, int pitch, bool loop, int slot, int snd, int bank) {
+    if ((snd != 35 && snd != 36) || !bank || size < 32 || pitch <= 0 || !psp_mem) return 0;   // bank 0 = common battle sounds; 35 / 36 of a fighter's bank = ki charge / transformation
+    static const int F[5][2] = {{0, 0}, {60, 0}, {115, -52}, {98, -55}, {122, -60}};
+    std::vector<int16_t> pcm; pcm.reserve(size / 16 * 28);
+    int h1 = 0, h2 = 0; int64_t ls = 0;
+    for (uint32_t b = 0; b + 16 <= size; b += 16) {
+        const uint8_t* q = psp_mem + ((addr + b) & psp_mem_mask);
+        int sh = q[0] & 15, fl = std::min(q[0] >> 4, 4);
+        if (q[1] & 4) ls = (int64_t)pcm.size();
+        for (int k = 0; k < 28; k++) {
+            int nib = (q[2 + k / 2] >> ((k & 1) * 4)) & 15;
+            int v = (int16_t)(nib << 12) >> (sh > 12 ? 9 : sh);
+            v += (h1 * F[fl][0] + h2 * F[fl][1] + 32) / 64;
+            v = std::max(-32768, std::min(32767, v)); h2 = h1; h1 = v; pcm.push_back((int16_t)v);
+        }
+        if (q[1] & 1) break;
+    }
+    int rate = (int)((int64_t)44100 * pitch / 4096);
+    if (rate < 600 || pcm.empty()) return 0;
+    std::vector<uint8_t> lv;
+    lip_levels([&](int64_t i) { return pcm[(size_t)i] / 32768.0; }, (int64_t)pcm.size(), rate, lv);
+    int64_t win = std::max(1, rate / 60), n = (int64_t)lv.size();
+    uint32_t id = 0xC0000000u | ((addr >> 4) & 0x3FFFFFFFu);
+    lip_shout_on(id, slot, std::move(lv), loop ? std::min<int64_t>(ls / win, n) : -1, loop ? n : -1, "adpcm", snd, bank);
+    return id;
+}
+// mouth level of the shout of the fighter in this slot of the fighter table (-1 = none)
+int psp_lip_shout_level(int slot) {
+    if (!lip_shout_n) return -1;
+    std::lock_guard<std::mutex> g(lip_mx);
+    uint64_t now = disc_us();
+    int best = -1;
+    for (size_t i = lip_shouts.size(); i-- > 0;) {
+        LipShout& t = lip_shouts[i];
+        size_t n = t.lv.size(), k = (size_t)((now - t.t0) * 60 / 1000000);
+        if (k >= n && t.lp1 > t.lp0 && t.lp0 >= 0) k = (size_t)t.lp0 + (k - (size_t)t.lp0) % (size_t)(t.lp1 - t.lp0);
+        if (k >= n) { lip_shouts.erase(lip_shouts.begin() + (long)i); continue; }
+        if (t.slot == slot) best = std::max(best, (int)t.lv[k]);
+    }
+    lip_shout_n = (int)lip_shouts.size();
+    return best;
 }
 
 // a fighter's voices read ahead when its pak is read: samples in memory and mouth levels, so the first play opens no file
@@ -7063,7 +7151,7 @@ static uint32_t disc_read(uint64_t pos, uint8_t* dst, uint32_t n) {
         }
         uint8_t* d = dst + (a - pos);
         uint32_t amount = (uint32_t)(b - a);
-        if (t.type == 2 && a == start) bt3_pak_read((uint32_t)(d - psp_mem), t.idx);
+        if (t.type == 2 && a == start) { bt3_pak_read((uint32_t)(d - psp_mem), t.idx); }
         const std::string* vr = t.type == 2 ? voice_raw_file((size_t)t.idx) : nullptr;
         if (t.type == 1) {
             memcpy(d, disc_index.data() + (a - start), std::min<uint64_t>(amount, disc_index.size() - (a - start)));

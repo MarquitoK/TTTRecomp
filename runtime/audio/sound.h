@@ -522,6 +522,7 @@ static std::atomic<uint32_t> uw_mask{0}, uw_lvl{0x7FC00000u};
 static std::atomic<int64_t> uw_ms{0};
 static int64_t uw_now() { return (int64_t)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
 void psp_snd_water(uint32_t mask, float level) { uint32_t u; memcpy(&u, &level, 4); uw_mask = mask; uw_lvl = u; uw_ms = uw_now(); }
+static uint32_t lip_voice[64];   // shout id a voice started (lip sync)
 static void sas_src(SasVoice& v, Ctx& c) {
     uint32_t ch = 0, st[4] = {0, 0, 0, 0};
     sfx_origin(c.r[29], &ch, st);
@@ -800,8 +801,24 @@ static bool snd_hle(Ctx& c, const char* n, uint32_t* out) {
             snd_log_voice(v->type == 4 ? "keyOn wav" : "keyOn", a0, k, v->addr, v->size, (uint32_t)(v->type == 4 ? v->wav : v->pitch));
             psp_sfx_hook(v->addr, v->size, c.r[31]);
             sas_src(*v, c);
+            if (lip_voice[k]) { psp_lip_shout_off(lip_voice[k]); lip_voice[k] = 0; }
+            {   // battle sound of a fighter (queue entry in s4, EBOOT_TTT 113.1): its shouts move the mouth
+                uint32_t lch = 0, lst[4] = {0, 0, 0, 0}; sfx_origin(c.r[29], &lch, lst);
+                // the queue entry: stored by the queue loop at +8 of its frame (0x0893D4C0), above the 0x10 frame of 0x0881B13C; s4 is reused by 0x0881AB5C
+                uint32_t q = psp_l32(0x08A7DBC8u), qe = psp_l32(c.r[29] + 16 + 48 + 16 + 144 + 64 + 48 + 0x10 + 8);
+                if ((lst[0] == 0x0893D6F4u || lst[0] == 0x0893D684u) && q && q < 0x10000000u && qe >= q && qe < q + 0x400u && !(qe & 3)) {
+                    int owner = (int8_t)psp_l8(qe + 0x1C), bank = psp_l8(qe + 0x1D), snd = (int)psp_l32(qe + 0x18);
+                    if (owner >= 0 && owner < 8) lip_voice[k] = v->type == 4 ? psp_lip_sfx(v->wav, v->loop != 0, owner, snd, bank) : v->type == 1 ? psp_lip_raw(v->addr, v->size, v->pitch, v->loop != 0, owner, snd, bank) : 0;
+                    static int ll = 0;
+                    if ((snd == 35 || snd == 36) && !lip_voice[k] && ll++ < 10) printf("lip: sonido %d banco %d sin boca: dueno %d, tipo %d, tam %u, paso %d\n", snd, bank, owner, v->type, v->size, v->pitch);
+                } else if (lst[0] == 0x0893D6F4u || lst[0] == 0x0893D684u) {
+                    static int lq = 0;
+                    if (lq++ < 6) printf("lip: entrada de la cola no valida: cola 0x%08X entrada 0x%08X sonido %d\n", q, qe, (int)lst[2]);
+                }
+            }
         } else if (!strcmp(n, "__sceSasSetKeyOff") && v) {
             sfx_log_event("keyOff", *v, k, c.r[31]);
+            if (lip_voice[k]) { psp_lip_shout_off(lip_voice[k]); lip_voice[k] = 0; }
             sas_key_off(*v);
             snd_log_voice("keyOff", a0, k, v->addr, (uint32_t)v->height, 0);
         } else if (!strcmp(n, "__sceSasSetNoise") && v) {

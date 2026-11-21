@@ -3,6 +3,8 @@
 // an animation face (value != 0) always wins. Without talk faces the mouth bone 0x31 turns (bone matrices [[ent+0x16B0] + 4 [ent+0x16B4] + 0xC],
 // 128 bytes per bone id, first 4x3 = the bone's own). Both only for this draw: the game state is restored right after.
 int psp_lip_level(uint32_t pak, int* known);
+int psp_lip_shout_level(int slot);
+extern std::atomic<int> lip_shout_n;
 static int cv_lip(uint32_t ent);
 struct LipSave { uint32_t ctrl = 0, face = 0, mtx = 0; float m[16], o[16]; bool face_set = false, bone_set = false; };
 static int lip_on() {
@@ -32,6 +34,11 @@ static void lip_begin(Ctx& c, LipSave& s) {
     if (!hdr || hdr >= 0x10000000u || (psp_l32(hdr) != 0x6C644D70u)) return;
     int known = 0, lv = psp_lip_level(lip_pak(hdr), &known), ov = cv_lip(ent);
     if (ov > -2) lv = ov;   // Character Reference viewer: its sample voice
+    if (lip_shout_n) {   // ki charge / transformation shout of this fighter (slot of the fighter table)
+        uint32_t t = psp_l32(0x08A7DBC8u); int n = t && t < 0x10000000u ? (int)psp_l32(t) : 0;
+        uint32_t base = n >= 1 && n <= 8 ? psp_l32(t + 4) : 0;
+        for (int i = 0; base && i < n; i++) if (entity_of(base + 0x1A90u * i) == ent) { lv = std::max(lv, psp_lip_shout_level(i)); break; }
+    }
     static int logs = 0; static uint32_t seen[8];
     bool newone = true;
     for (int i = 0; i < 8; i++) if (seen[i] == hdr) newone = false;
