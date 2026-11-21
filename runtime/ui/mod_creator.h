@@ -769,6 +769,7 @@ static void cm_open() {
             cm_ctl(L"STATIC", NL[l], 0, 16, 298 + 30 * l, 80, 18, IDR_N_L0 + l);
             cm_ctl(L"EDIT", L"", ES_AUTOHSCROLL | WS_TABSTOP, 104, 294 + 30 * l, 208, 24, IDR_N0 + l);
         }
+        for (int l = 0; l < 2; l++) cm_ctl(L"EDIT", L"", ES_AUTOHSCROLL | WS_TABSTOP, 104, 294, 208, 24, IDR_CN0 + l);
         re_register();
         cm_ctl(L"STATIC", L"", 0, 16, 388, 1, 1, IDR_IMG_L);
         static const int IB[4][4] = {{16, 388, 70, 84}, {92, 388, 70, 84}, {16, 442, 146, 30}, {168, 388, 146, 84}};

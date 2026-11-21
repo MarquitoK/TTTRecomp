@@ -21,11 +21,11 @@ bool psp_original_exists(int k, int kind);
 enum { IDR_NEW = 3200, IDR_COPY, IDR_FORM, IDR_DEL, IDR_MOD_L, IDR_MOD, IDR_RESET, IDR_TITLE, IDR_SUB, IDR_ID_L, IDR_ID, IDR_SYS_L, IDR_SYS,
        IDR_BASE_L, IDR_BASE, IDR_N_L0, IDR_N_L1, IDR_N_L2, IDR_N0, IDR_N1, IDR_N2, IDR_IMG_L, IDR_IMG0, IDR_IMG1, IDR_IMG2, IDR_IMG3,
        IDR_F_L, IDR_F0, IDR_F1, IDR_F2, IDR_F3, IDR_F4, IDR_F5, IDR_F6, IDR_F7, IDR_D_L, IDR_D0, IDR_D1, IDR_D2, IDR_D3, IDR_T0, IDR_T1, IDR_T2, IDR_T3, IDR_CPREV, IDR_CNAME, IDR_CNEXT, IDR_LANG0, IDR_LANG1, IDR_LANG2, IDR_LANG3, IDR_INFO, IDR_GRID, IDR_FORMS_L, IDR_FORMS, IDR_SUM,
-       IDR_PG0, IDR_PG1, IDR_LT0, IDR_LT1, IDR_LT2, IDR_LN0, IDR_LB0 = IDR_LN0 + 9, IDR_LHELP = IDR_LB0 + 9, IDR_FTL, IDR_FTC, IDR_FTN0, IDR_FTN1, IDR_FT0, IDR_FT1, IDR_PCM, IDR_PG2, IDR_PINFO, IDR_PCPREV, IDR_PCNAME, IDR_PCNEXT, IDR_PUNDO, IDR_PVIEW, IDR_PS0, IDR_PS_END = IDR_PS0 + 16, IDR_LAST };   // label boxes: kind * 3 + lang (name, form right, form left; en, es)
+       IDR_PG0, IDR_PG1, IDR_LT0, IDR_LT1, IDR_LT2, IDR_LN0, IDR_LB0 = IDR_LN0 + 9, IDR_LHELP = IDR_LB0 + 9, IDR_FTL, IDR_FTC, IDR_FTN0, IDR_FTN1, IDR_FT0, IDR_FT1, IDR_PCM, IDR_PG2, IDR_PINFO, IDR_PCPREV, IDR_PCNAME, IDR_PCNEXT, IDR_PUNDO, IDR_PVIEW, IDR_PS0, IDR_PS_END = IDR_PS0 + 16, IDR_CN0, IDR_CN1, IDR_LAST };   // label boxes: kind * 3 + lang (name, form right, form left; en, es)
 
 struct ReRefs { std::string tfk[4], fuk[3][2]; std::vector<roster::VsLine> vs;   // characters named by key or id (roster.txt transform, fusion_N, intro, victory)
     bool any() const { for (auto& k : tfk) if (!k.empty()) return true; for (auto& f : fuk) if (!f[0].empty() || !f[1].empty()) return true; return !vs.empty(); } };
-struct ReChar { bool pcm = false, keyed = false; std::string raw; int sysid = -1, donor = 3; std::string id, name[3], img[4], file[14], bt3[10], dmg[10], tex1[10]; std::map<std::string, std::string> lang; };   // tex1: level 1 damage textures per colour ("on" = made on export, "mod:" = on disk)   // dmg: damaged costume per colour ("ttt:", "bt3:" or "dir:")   // file: "ttt:" pak or "dir:" folder; bt3: BT3 paks over a folder (\n)
+struct ReChar { bool pcm = false, keyed = false; std::string raw; int sysid = -1, donor = 3; std::string id, name[3], img[4], file[14], bt3[10], dmg[10], tex1[10], cname[10][2]; std::map<std::string, std::string> lang; };   // cname: optional colour names (EN, ES)   // tex1: level 1 damage textures per colour ("on" = made on export, "mod:" = on disk)   // dmg: damaged costume per colour ("ttt:", "bt3:" or "dir:")   // file: "ttt:" pak or "dir:" folder; bt3: BT3 paks over a folder (\n)
 struct ReOrig { std::string name[3]; int newid = -1; };   // an original character: own names, own BT3 id
 struct ReItem { int sys, kind; };
 struct ReGrid { HWND h = nullptr; int mode = 0, cols = 4, scroll = 0, sel = -1, marker = -1; std::vector<ReItem> items; int locked = -1; int cw = 118, ch = 98, iw = 110, ih = 62; };   // mode 2 picker, 3 label picker
@@ -338,7 +338,7 @@ static bool re_has_content() {
     for (auto& o : re_ochar) {   // files of originals (colours, SFX, voices, damaged, level 1 textures)
         own = own || o.second.pcm;
         for (auto& v : o.second.file) own = own || !v.empty();
-        for (int j = 0; j < RE_COLS; j++) own = own || !o.second.dmg[j].empty() || !o.second.tex1[j].empty();
+        for (int j = 0; j < RE_COLS; j++) own = own || !o.second.dmg[j].empty() || !o.second.tex1[j].empty() || !o.second.cname[j][0].empty() || !o.second.cname[j][1].empty();
         for (auto& l : o.second.lang) own = own || !l.second.empty();
     }
     return !re_chars.empty() || !re_orig.empty() || re_layout_set || lab || own || pe_any();
@@ -749,7 +749,7 @@ static void re_action(int id) {
 #ifndef EM_SETCUEBANNER
 #define EM_SETCUEBANNER 0x1501
 #endif
-static int re_page_of(int id) { return id >= IDR_SUB && id <= IDR_INFO ? 0 : id >= IDR_LT0 && id <= IDR_FT1 ? 1 : id >= IDR_PINFO && id < IDR_PS_END ? 2 : id == IDR_PCM ? 0 : -1; }
+static int re_page_of(int id) { return (id >= IDR_SUB && id <= IDR_INFO) || id == IDR_CN0 || id == IDR_CN1 ? 0 : id >= IDR_LT0 && id <= IDR_FT1 ? 1 : id >= IDR_PINFO && id < IDR_PS_END ? 2 : id == IDR_PCM ? 0 : -1; }
 static void re_show(int id, bool on) { HWND c = GetDlgItem(cm, id); int pg = re_page_of(id); if (c) ShowWindow(c, on && cm_tab == 1 && (pg < 0 || (pg == re_page && (pg == 2) == (re_view == 0))) ? SW_SHOW : SW_HIDE); }
 static void re_set_text(int id, const std::string& t) {
     HWND c = GetDlgItem(cm, id);
@@ -832,6 +832,12 @@ static void re_panel() {
     for (int id : {IDR_F1, IDR_F2, IDR_F3, IDR_D1, IDR_D2, IDR_D3, IDR_T1, IDR_T2, IDR_T3, IDR_D_L}) re_show(id, false);
     for (int id : {IDR_BASE_L, IDR_BASE}) re_show(id, base);
     re_set_text(IDR_CNAME, "Color " + std::to_string(re_col + 1));
+    for (int l = 0; l < 2; l++) {
+        re_show(IDR_CN0 + l, nw || orig);
+        ReChar* fc = nw || orig ? re_fchar(s) : nullptr;
+        re_set_text(IDR_CN0 + l, fc ? fc->cname[re_col][l] : std::string());
+        SendMessageW(GetDlgItem(cm, IDR_CN0 + l), EM_SETCUEBANNER, TRUE, (LPARAM)(L"Color " + std::to_wstring(re_col + 1)).c_str());
+    }
     { std::string* v = re_dmg_of(s, re_col); re_mark(IDR_D0, v && !v->empty(), false, v && re_is_mod(*v)); }
     re_lang_panel(s, nw || orig);
     {   // charge row after the voices: below the voice pack buttons when they are shown
@@ -1165,6 +1171,7 @@ static void re_general_layout(int s, bool nw, bool orig, bool base, bool chg) {
     { ReRow c; c.y = y; c.h = 28; c.label = L"Files"; c.cap = true; re_grows.push_back(c); y += 28; }
     place(IDR_CPREV, 884, y + 3, 26, 26); place(IDR_CNAME, 912, y + 3, 72, 26); place(IDR_CNEXT, 986, y + 3, 26, 26);
     file(IDR_F0, L"");
+    edit(IDR_CN0, L"Color name EN"); edit(IDR_CN1, L"Color name ES");
     file(IDR_T0, L"Damaged textures");
     file(IDR_D0, L"Damaged char");
     file(IDR_F4, L"SFX");
@@ -1679,6 +1686,13 @@ static void re_command(int id, int code) {
         InvalidateRect(re_main.h, nullptr, FALSE); InvalidateRect(re_forms.h, nullptr, FALSE);
         return;
     }
+    if (code == EN_CHANGE && (id == IDR_CN0 || id == IDR_CN1) && s >= 0) {
+        wchar_t t[128] = L""; GetWindowTextW(GetDlgItem(cm, id), t, 128);
+        std::string v = mw_u8(t);
+        while (!v.empty() && v.back() == ' ') v.pop_back();
+        if (ReChar* fc = re_fchar(s)) fc->cname[re_col][id - IDR_CN0] = v;
+        return;
+    }
     if (code == EN_CHANGE && id >= IDR_N0 && id <= IDR_N2 && s >= 0) {
         int l = id - IDR_N0;
         wchar_t t[512] = L""; GetWindowTextW(GetDlgItem(cm, id), t, 512);
@@ -1732,6 +1746,28 @@ static void re_reset_all() {
     re_cur = 0; re_form = -1;
 }
 // returns the mod's character folders (Packfile-relative) so the caller does not add them twice
+// optional colour name: <colour folder>/color_name.txt with "en = ..." and "es = ..." (UTF-8)
+static bool re_cname_read(const std::string& path, std::string nm[2]) {
+    FILE* f = _wfopen(mw_w(path).c_str(), L"rb");
+    if (!f) return false;
+    char line[512];
+    bool any = false;
+    while (fgets(line, sizeof line, f)) {
+        std::string t = line;
+        if (t.size() >= 3 && !t.compare(0, 3, "\xEF\xBB\xBF")) t.erase(0, 3);
+        while (!t.empty() && (t.back() == '\n' || t.back() == '\r' || t.back() == ' ')) t.pop_back();
+        size_t e = t.find('=');
+        std::string k = e == std::string::npos ? "" : t.substr(0, e), v = e == std::string::npos ? t : t.substr(e + 1);
+        while (!k.empty() && k.back() == ' ') k.pop_back();
+        while (!v.empty() && v[0] == ' ') v.erase(0, 1);
+        for (auto& ch : k) ch = (char)tolower((unsigned char)ch);
+        if (v.empty()) continue;
+        if (k == "en") nm[0] = v; else if (k == "es") nm[1] = v; else if (k.empty()) { nm[0] = v; nm[1] = v; }
+        any = true;
+    }
+    fclose(f);
+    return any;
+}
 static std::vector<std::string> re_load_mod(const std::string& root, const std::string& mod) {
     re_reset_all();
     re_mod_src = mod; re_mod_root = root;
@@ -1784,6 +1820,7 @@ static std::vector<std::string> re_load_mod(const std::string& root, const std::
             if (isf(b + "charge/" + RE_CHG_IN) && isf(b + "charge/" + RE_CHG_LOOP)) c.file[RF_CHG1] = "two:" + b + "charge/" + RE_CHG_IN + "\n" + b + "charge/" + RE_CHG_LOOP;
             for (auto& pk : re_pk_ids) { std::string lv = root + "/" + mod + "/Lang/" + pk + "/Packfile/" + folder + "/Voices"; if (isd(lv)) c.lang[pk] = "dir:" + lv; }
             for (int j = 0; j < RE_COLS; j++) { std::string dd = b + "color_" + std::to_string(j + 1) + "/1_p_dmg"; if (isd(dd)) c.dmg[j] = "dir:" + dd; }
+            for (int j = 0; j < RE_COLS; j++) re_cname_read(b + "color_" + std::to_string(j + 1) + "/color_name.txt", c.cname[j]);
         }
         re_chars.push_back(c);
     }
@@ -1806,6 +1843,8 @@ static std::vector<std::string> re_load_mod(const std::string& root, const std::
         for (int j = 0; j < RE_COLS; j++) {
             std::string f = psp_colour_folder(k, j), dd = root + "/" + mod + "/Packfile/" + f + "/1_p_dmg";
             if (!f.empty() && isd(dd)) re_ochar[roster::VANILLA[k]].dmg[j] = "mod:" + dd;
+            std::string nm[2];
+            if (!f.empty() && re_cname_read(root + "/" + mod + "/Packfile/" + f + "/color_name.txt", nm)) { ReChar& o = re_ochar[roster::VANILLA[k]]; o.sysid = roster::VANILLA[k]; o.cname[j][0] = nm[0]; o.cname[j][1] = nm[1]; }
         }
     re_ftab = d.ftext;
     for (auto& x : d.chars) {
@@ -1862,6 +1901,14 @@ static std::string re_pak_name(std::string n) {   // .pck1/.pck2 travel as .pak 
 }
 typedef std::function<bool(const std::string&, const std::vector<uint8_t>&)> ReAdd;
 static std::function<int(const std::string&, const std::string&)> re_copy;   // saving over a mod: a file goes straight to disk (1 done, -1 failed, 0 read it)
+static bool re_cname_export(const ReAdd& add, const std::string& folder, const std::string nm[2], int& files) {
+    if (nm[0].empty() && nm[1].empty()) return true;
+    std::string t;
+    if (!nm[0].empty()) t += "en = " + nm[0] + "\n";
+    if (!nm[1].empty()) t += "es = " + nm[1] + "\n";
+    files++;
+    return add(folder + "/color_name.txt", std::vector<uint8_t>(t.begin(), t.end()));
+}
 static bool re_add_file(const ReAdd& add, const std::string& name, const std::string& src, int& files) {
     if (re_dropped(src)) return true;
     if (re_copy) { int r = re_copy(name, src); if (r) { files++; return r > 0; } }
@@ -2137,6 +2184,8 @@ static bool re_export(const ReAdd& add, int& files, std::wstring& err) {
             if (!re_dmg_export(add, pf + "/color_" + std::to_string(j + 1) + "/1_p_dmg", c.dmg[j], files)) { err = L"Cannot read the files of " + mw_w(c.id) + L" " + RE_DMG_N(j); return false; }
         for (int j = 0; j < RE_COLS; j++)
             if (!re_tex1_export(add, pf + "/color_" + std::to_string(j + 1) + "/1_p", c.sysid, j, files)) { err = L"Cannot copy the textures of " + mw_w(c.id) + L" " + RE_TEX1_N(j); return false; }
+        for (int j = 0; j < RE_COLS; j++)
+            if (!re_cname_export(add, pf + "/color_" + std::to_string(j + 1), c.cname[j], files)) { err = L"Cannot write the color names of " + mw_w(c.id); return false; }
     }
     for (auto& o : re_ochar) {   // originals: what is already in the mod ("mod:") travels with the mod's own Packfile content
         int k = roster::group_vanilla(o.first);
@@ -2171,6 +2220,10 @@ static bool re_export(const ReAdd& add, int& files, std::wstring& err) {
         for (int j = 0; j < RE_COLS; j++) {
             std::string f = psp_colour_folder(k, j);
             if (!o.second.tex1[j].empty() && (f.empty() || !re_tex1_export(add, "Packfile/" + f + "/1_p", o.first, j, files))) { err = L"Cannot copy the textures of " + mw_w(re_label(o.first)) + L" " + RE_TEX1_N(j); return false; }
+        }
+        for (int j = 0; j < RE_COLS; j++) {
+            std::string f = psp_colour_folder(k, j);
+            if (!f.empty() && !re_cname_export(add, "Packfile/" + f, o.second.cname[j], files)) { err = L"Cannot write the color names of " + mw_w(re_label(o.first)); return false; }
         }
         for (int j = 0; o.second.pcm && j < RE_COLS; j++) {   // Pre CMAN of an original in a new mod: six empty cameras per colour
             std::string f = psp_colour_folder(k, j);

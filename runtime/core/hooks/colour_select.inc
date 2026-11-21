@@ -9,6 +9,8 @@ static int cs_focus[4], cs_av[4];   // per player row: focused row (0 colour, 1 
 static bool cs_two[4];
 static int cs_menu[4] = {-1, -1, -1, -1};   // character the costume of a row was chosen for
 static int s3d_sys_of_menu(int n);
+static uint32_t cs_cent[4];   // PACKFILE entry of the colour under each player's selector
+std::string psp_colour_name(uint32_t idx, int lang);
 
 static uint32_t cs_str(const char* s, int k) {
     if (!cs_mem) cs_mem = psp_reserve(0x300);
@@ -62,7 +64,7 @@ static void cs_avail(const Ctx& c, uint32_t obj, int p) {
         key[p][0] = n; key[p][1] = col;
         int s = s3d_sys_of_menu(n);
         uint32_t e = s >= 0 && col >= 0 && col < 20 ? mpm_call(c, 0x089C6CA0u, (uint32_t)s, (uint32_t)col) & 0xFFFFu : 0, d = 0;
-        ent[p] = e;
+        ent[p] = e; cs_cent[p] = e;
         cs_av[p] = e ? (psp_disc_lv1(e) ? 2 : 0) | (psp_disc_dmg(e, &d) ? 4 : 0) : 0;
         static int logs = 0;
         if (cs_av[p] && logs++ < 20) printf("colores: jugador %d, numero %d color %d: traje danado%s%s\n", p + 1, n, col + 1, cs_av[p] & 2 ? " 1" : "", cs_av[p] & 4 ? " 2" : "");
@@ -200,7 +202,10 @@ static bool cs_wrap(uint32_t dir, Ctx& c, void (*orig)(Ctx&)) {
         static const char* W[2] = {"Color", "Color"};
         static const char* D[2][4] = {{"Normal", "Damaged 1", "Damaged 2", "Damaged"}, {"Normal", "Da\xC3\xB1" "ado 1", "Da\xC3\xB1" "ado 2", "Da\xC3\xB1" "ado"}};
         char b[32];
-        snprintf(b, sizeof b, "%s %u", W[li], psp_l32(obj + 0x8C) + 1);
+        std::string cn = pv && cs_cent[p] ? psp_colour_name(cs_cent[p], li) : std::string();
+        if (cn.size() > 31) { cn.resize(31); while (!cn.empty() && ((unsigned char)cn.back() & 0xC0) == 0x80) cn.pop_back(); if (!cn.empty() && ((unsigned char)cn.back() & 0xC0) == 0xC0) cn.pop_back(); }
+        if (!cn.empty()) snprintf(b, sizeof b, "%s", cn.c_str());
+        else snprintf(b, sizeof b, "%s %u", W[li], psp_l32(obj + 0x8C) + 1);
         mpm_call(c0, 0x08832448u, font);
         cs_text(c0, font, slot, b, 0, two && cs_focus[p]);
         uint32_t s2 = two ? cs_text_slot(c0, obj, 1) : 0;

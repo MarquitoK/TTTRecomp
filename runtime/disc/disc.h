@@ -108,7 +108,7 @@ static bool ignore_file(const std::string& name) {
     std::string n = name;
     for (auto& c : n) c = (char)tolower((unsigned char)c);
     return n.empty() || n[0] == '.' || n == "thumbs.db" || n == "desktop.ini" || n == "_pak.txt" || n == "_cola.bin" || n == "_txt1.bin" || n == "texto.txt" || n == "_vagp.txt" || n == "_tex.txt" || n == "config.set" || n == "preview_txts.txt" ||
-           n == "043_move_list_en.txt" || n == "1_p_dmg" || n == "pre_cman" || n.compare(0, 17, "011_textures_dmg.") == 0 || n == "043_move_list_es.txt" || (n.size() > 4 && n.compare(n.size() - 4, 4, ".vfx") == 0);
+           n == "043_move_list_en.txt" || n == "color_name.txt" || n == "1_p_dmg" || n == "pre_cman" || n.compare(0, 17, "011_textures_dmg.") == 0 || n == "043_move_list_es.txt" || (n.size() > 4 && n.compare(n.size() - 4, 4, ".vfx") == 0);
 }
 
 static bool ends_with(const std::string& s, const char* suffix) {
@@ -6536,6 +6536,39 @@ std::string psp_cr_voice_info(int idx) {
 int psp_cr_pak() { return disc_ready && cr_index != (size_t)-1 ? (int)cr_index : -1; }
 // a colour entry whose 1_p has level 1 damage textures (011_textures_dmg.*)
 std::string psp_disc_key(uint32_t idx) { return disc_ready && idx < disc_pk.size() ? (disc_pk[idx].key.empty() ? disc_pk[idx].fpath : disc_pk[idx].key) : std::string("-"); }
+// optional name of a colour (mod creator): <colour folder>/color_name.txt, "en = ..." / "es = ...", a line without a key = every language
+std::string psp_colour_name(uint32_t idx, int lang) {
+    if (!disc_ready || idx >= disc_pk.size()) return "";
+    static std::mutex mx;
+    static std::map<uint32_t, std::array<std::string, 2>> memo;
+    std::lock_guard<std::mutex> g(mx);
+    auto it = memo.find(idx);
+    if (it == memo.end()) {
+        std::array<std::string, 2> nm;
+        std::string k = dmg_strip(disc_pk[idx].key.empty() ? disc_pk[idx].fpath : disc_pk[idx].key);
+        if (ends_with(lower(k), ".pak")) k.resize(k.size() - 4);
+        std::vector<uint8_t> f;
+        if (!lower(k).compare(0, 11, "characters/") && read_file(disc_dir + "/Packfile/" + k + "/color_name.txt", f)) {
+            std::string t(f.begin(), f.end()), line;
+            if (t.size() >= 3 && !t.compare(0, 3, "\xEF\xBB\xBF")) t.erase(0, 3);
+            size_t a = 0;
+            while (a < t.size()) {
+                size_t b = t.find('\n', a); line = t.substr(a, b == std::string::npos ? std::string::npos : b - a); a = b == std::string::npos ? t.size() : b + 1;
+                while (!line.empty() && (line.back() == '\r' || line.back() == ' ')) line.pop_back();
+                size_t e = line.find('=');
+                std::string key = e == std::string::npos ? "" : lower(line.substr(0, e)), v = e == std::string::npos ? line : line.substr(e + 1);
+                while (!key.empty() && key.back() == ' ') key.pop_back();
+                while (!v.empty() && v[0] == ' ') v.erase(0, 1);
+                if (v.empty()) continue;
+                if (key == "en") nm[0] = v; else if (key == "es") nm[1] = v; else if (key.empty()) { if (nm[0].empty()) nm[0] = v; if (nm[1].empty()) nm[1] = v; }
+            }
+            for (int l = 0; l < 2; l++) if (nm[l].empty()) nm[l] = nm[1 - l];
+            if (!nm[0].empty()) printf("colores: nombre del color %s: %s / %s\n", k.c_str(), nm[0].c_str(), nm[1].c_str());
+        }
+        it = memo.emplace(idx, nm).first;
+    }
+    return it->second[lang == 1 ? 1 : 0];
+}
 bool psp_disc_lv1(uint32_t idx) {
     if (!disc_ready || idx >= disc_pk.size()) return false;
     std::string k = lower(dmg_strip(disc_pk[idx].key.empty() ? disc_pk[idx].fpath : disc_pk[idx].key));
