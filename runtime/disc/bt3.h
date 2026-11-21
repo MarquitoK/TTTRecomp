@@ -15,7 +15,7 @@
 
 namespace bt3 {
 
-static const uint32_t VERSION = 15;
+static const uint32_t VERSION = 17;
 static const uint32_t VTYPE = 3u | 3u << 5 | 3u << 7 | 3u << 9 | 1u << 14;   // float uv, normal, position, 2 float weights
 
 static inline uint32_t u32(const uint8_t* p) { uint32_t v; memcpy(&v, p, 4); return v; }
@@ -98,7 +98,17 @@ static std::vector<Tri> loose_tris(const uint8_t* m, uint32_t n, uint32_t at) {
     return out;
 }
 
-static int part_flag(int id) { return id == 0x30 ? 6 : id == 0x40 ? 1 : id == 0x41 ? 2 : id == 0x42 ? 7 : id == 0x43 ? 8 : 0; }
+// part group (TTT pMdl part +0x0C) from the BT3 node and the model's part layout (decomp BtlObj_IsNodeShown, hdr +0x0C 0x10000 A,
+// 0x20000 B, 0x40000 C); E1 / E2 = equip 1 / 2. Class C hides 0x23..0x2C with E2: TTT has no group for it, so it stays visible
+static int part_flag(int id, uint32_t cls) {
+    if (id == 0x30) return 6;
+    bool rh = id >= 0x15 && id <= 0x1E, lh = id >= 0x23 && id <= 0x2C;
+    if (cls & 0x10000) return lh ? 4 : rh ? 5 : id == 0x42 ? 7 : id == 0x43 ? 8 : 0;
+    if (cls & 0x20000) return lh ? 4 : id == 0x40 ? 1 : 0;
+    if (cls & 0x40000) return rh ? 4 : id == 0x40 ? 1 : id == 0x41 ? 2 : id == 0x42 ? 7 : id == 0x43 ? 8 : 0;
+    return id == 0x40 ? 1 : id == 0x41 ? 2 : id == 0x42 ? 7 : id == 0x43 ? 8 : 0;
+}
+static uint32_t part_class(uint32_t f) { return f & 0x10000 ? 0x10000 : f & 0x60000 ? 0x20000 : 0; }   // TTT header bits: C draws as B (group 4 hidden with E1)
 
 // texture keys of the port: 0..63 main CTEX entry (= CBP), 64 + 16 * s + j image j of the face CTEX 13 + s, 128 + j blink CTEX 12
 static const int KEY_FACE = 64, KEY_BLINK = 128;
@@ -114,6 +124,8 @@ static void emit(const uint8_t* m, const std::vector<Block>& bl, const std::vect
     uint32_t nb = (uint32_t)bl.size(), mt = 0xA0, ex = mt + 32 * nmat, bt = ex + 32, pt = bt + 160 * nb, geo = pt + 32 * (uint32_t)parts.size();
     o.assign(geo, 0);
     memcpy(&o[0], face ? "pMdF" : "pMdl", 4); w32(o, 4, 6); w32(o, 8, nb);
+    uint32_t cls = face ? 0 : u32(m + 0x0C) & 0x70000;
+    w32(o, 0x0C, part_class(cls));
     wf(o, 0x10, 40.0f); wf(o, 0x14, 120.0f); memcpy(&o[0x18], m + 0x18, 16);
     wf(o, 0x40, 1.0f); wf(o, 0x44, 1.0f); wf(o, 0x48, 1.0f);
     w32(o, 0x50, bt); w32(o, 0x54, nmat); w32(o, 0x58, mt); w32(o, 0x5C, (uint32_t)parts.size()); w32(o, 0x60, pt); w32(o, 0x68, ex);
@@ -193,7 +205,7 @@ static void emit(const uint8_t* m, const std::vector<Block>& bl, const std::vect
         int16_t mm = (int16_t)pp.outline;
         uint16_t key = (uint16_t)(0x8000 | pp.key);
         memcpy(&o[e], &mm, 2); o[e + 2] = 0xFF; o[e + 3] = 0xFF;
-        w32(o, e + 4, base); w32(o, e + 8, size); w32(o, e + 12, (uint32_t)part_flag(pp.id));
+        w32(o, e + 4, base); w32(o, e + 8, size); w32(o, e + 12, (uint32_t)part_flag(pp.id, cls));
         memcpy(&o[e + 0x10], &key, 2);
     }
 }
@@ -1152,7 +1164,7 @@ static bool vfx_pak(const uint8_t* d, uint32_t n, std::vector<uint8_t>& o, EffSt
                 continue;
             }
         }
-        if (i >= 3 && is_ctex(p, m)) {
+        if ((i >= 3 || i == 0) && is_ctex(p, m)) {   // file 00 can be a texture: class 5 attacks 0x158 / 0x202 paint their cuts with it
             if (ctex_to_atex(p, m, parts[i])) { st.tex++; continue; }
             st.bad++;
         }

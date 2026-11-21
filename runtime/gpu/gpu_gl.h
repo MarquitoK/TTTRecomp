@@ -4230,6 +4230,7 @@ static void glr_flush_queue() {
         glBindVertexArray(glr_vao);
     }
     uint64_t gvu1 = perf_clock(); gv_t[5] += gvu1 - gvu0;
+    bool scr_fade = (psp_l32(0x08B40D38) | psp_l32(0x08B40D98) | psp_l32(0x08B40DF8)) != 0;   // a screen fade slot of the game is drawing (flags +0x58)
     for (size_t i = 0; i < queue.size(); i++) {
         const Job& t = queue[i];
         CpJob cpj_(t.cls);
@@ -4244,7 +4245,7 @@ static void glr_flush_queue() {
         gfxw_now = won && wat_mode == 2 && psp_map_gfxw && wat_cam[0];
         float wave = won && wat_mode != 2 && wat_cam[0] ? WAT_WAVE : 0.0f;
         bool fx_any = gfxw_now || wave > 0 || fx.rush > 0 || fx.dash > 0 || fx.imode || fx.ab > 0 || fx.lines > 0 || (FX_BLOOM > 0 && FX_BLOOMK > 0) || g3_any || atm_on();
-        bool fx_here = fx_any && battle && !wat_done && !wat_split && !t.d3 && wat_3d && e0.texture && !rt && e0.f.width >= mainw && main_now() && !(patch_fx_after_back.val && t.back);   // first 2D draw after the scene and the outline (those read the screen): HUD
+        bool fx_here = fx_any && battle && !wat_done && !wat_split && !t.d3 && wat_3d && (e0.texture || (scr_fade && i >= last3d)) && !rt && e0.f.width >= mainw && main_now() && !(patch_fx_after_back.val && t.back);   // first 2D draw after the scene and the outline (those read the screen): HUD, or an untextured one after the last 3D job (screen fade)
         if (fx_here && i < last3d) {   // a 2D draw in the middle of the scene (sprite effects, LOD point clouds): wait for the last 3D job
             fx_here = false; static int pe = 0, pf = -1;
             if (pe < 6 && (int)toon_fno != pf) { pe++; pf = (int)toon_fno; size_t n3 = 0; for (size_t k = i; k < last3d; k++) n3 += queue[k].d3; printf("fx: dibujo 2D 0x%08X %dx%d en medio de la escena, quedan %u trabajos 3D: los efectos esperan\n", e0.t.dir, e0.t.w, e0.t.h, (unsigned)n3); }
@@ -4271,7 +4272,7 @@ static void glr_flush_queue() {
             static int sdl = 0; static uint32_t sdf = 0;
             if (sdl < 6 && toon_fno - sdf > 90) { sdl++; sdf = toon_fno; printf("suave: dibujo 2D %u de %u en el cuadro %u: batalla %d, escena 3D %d, tras el ultimo 3D %d, lee un destino %d, dividido %d, textura %d, efectos de pantalla %d hechos %d\n", (unsigned)i, (unsigned)queue.size(), (unsigned)toon_fno, (int)battle, (int)wat_3d, (int)(i >= last3d), (int)rt, (int)wat_split, (int)e0.texture, (int)fx_any, (int)wat_done); }
         }
-        if (sm_on && sm_scn_f != toon_fno && battle && !t.d3 && !(patch_fx_after_back.val && t.back) && wat_3d && i >= last3d && !rt && !wat_split && e0.texture && (wat_done || !fx_any) && e0.f.width >= mainw) {
+        if (sm_on && sm_scn_f != toon_fno && battle && !t.d3 && !(patch_fx_after_back.val && t.back) && wat_3d && i >= last3d && !rt && !wat_split && (e0.texture || scr_fade) && (wat_done || !fx_any) && e0.f.width >= mainw) {
             DestGL* sd = glr_find(e0.f.dir, e0.f.width, e0.f.fmt);
             if (sd->width >= mainw) { tpk(7); glr_draw_batch(); sm_scene_copy(sd); st_prev = 0xFFFFFFFFu; tpk(2); }
         }
