@@ -1204,7 +1204,7 @@ static int toon_part(uint32_t va, int* mat, int* flag) {
 // TPAL: optional last entry of the character pak (Tools > Toon palettes): per material a BT3-style ramp added to the texture.
 // The editor can push a live table for a model (same model signature): it wins over the pak until the game restarts.
 struct TpalEnt { uint8_t mat, mode, flags, row, glow; };
-struct TpalSet { uint32_t hdr, pak, hash, ep, sig; std::vector<TpalEnt> e; int live; std::array<uint8_t, 256> gl; };
+struct TpalSet { uint32_t hdr, pak, hash, ep, sig; std::vector<TpalEnt> e; int live; std::array<uint8_t, 256> gl; uint32_t src = 0; };
 static std::vector<TpalSet> tpal_sets;
 static std::vector<std::array<uint8_t, 64>> tpal_rows;
 static bool tpal_dirty = false;
@@ -1216,9 +1216,16 @@ void psp_tpal_live(uint32_t sig, const uint8_t* d, int n) {
     if (d && n >= 8) tpal_live.push_back({sig, std::vector<uint8_t>(d, d + n)});
 }
 static std::vector<std::pair<uint32_t, std::vector<uint8_t>>> tpal_bt3;   // BT3 characters' own shading ramps (Cel BT3)
-int psp_tpal_bt3(uint32_t sig, const uint8_t* d, int n) {   // 0 new, 1 same, 2 replaced with other ramps, 3 no ramps (kept), 4 no ramps
+static std::map<uint32_t, std::vector<uint8_t>> tpal_src, metal_src;   // BT3 tables by source (P file or opened folder of one colour or damaged)
+static std::map<uint32_t, uint32_t> bt3_pak_src;   // guest address of a character pak -> its BT3 source
+void psp_bt3_pak(uint32_t pak, uint32_t src) {
+    std::lock_guard<std::mutex> g(tpal_mx);
+    if (src) bt3_pak_src[pak] = src; else bt3_pak_src.erase(pak);
+}
+int psp_tpal_bt3(uint32_t sig, uint32_t src, const uint8_t* d, int n) {   // 0 new, 1 same, 2 replaced with other ramps, 3 no ramps (kept), 4 no ramps
     std::lock_guard<std::mutex> g(tpal_mx);
     bool ok = d && n >= 8;
+    if (src) { if (ok) tpal_src[src].assign(d, d + n); else tpal_src.erase(src); }
     for (auto it = tpal_bt3.begin(); it != tpal_bt3.end(); ++it) if (it->first == sig) {
         if (!ok) return 3;
         if (it->second.size() == (size_t)n && !memcmp(it->second.data(), d, n)) return 1;
@@ -1237,9 +1244,14 @@ static uint64_t metal_owner[32];
 static float metal_nf[64];
 static int metal_next = 0;
 static void metal_forget(uint32_t sig) { for (auto s = metal_slot_of.begin(); s != metal_slot_of.end();) if ((uint32_t)(s->first >> 32) == sig) s = metal_slot_of.erase(s); else ++s; }
-int psp_metal_bt3(uint32_t sig, const uint8_t* d, int n) {   // 0 new, 1 same, 2 replaced, 3 none (an earlier table with this signature is kept, like the ramps), 4 none
+int psp_metal_bt3(uint32_t sig, uint32_t src, const uint8_t* d, int n) {   // 0 new, 1 same, 2 replaced, 3 none (an earlier table with this signature is kept, like the ramps), 4 none
     std::lock_guard<std::mutex> g(tpal_mx);
     bool ok = d && n >= 16 && !memcmp(d, "MTL1", 4);
+    if (src) {
+        auto m = metal_src.find(src);
+        bool same = ok && m != metal_src.end() && m->second.size() == (size_t)n && !memcmp(m->second.data(), d, n);
+        if (!same) { metal_forget(src); if (ok) metal_src[src].assign(d, d + n); else metal_src.erase(src); }
+    }
     for (auto it = metal_bt3.begin(); it != metal_bt3.end(); ++it) if (it->first == sig) {
         if (!ok) return 3;
         if (it->second.size() == (size_t)n && !memcmp(it->second.data(), d, n)) return 1;
@@ -1252,15 +1264,17 @@ int psp_metal_bt3(uint32_t sig, const uint8_t* d, int n) {   // 0 new, 1 same, 2
     metal_bt3.push_back({sig, std::vector<uint8_t>(d, d + n)});
     return 0;
 }
-static int metal_slot(uint32_t sig, int key) {
+static int metal_slot(uint32_t sig, uint32_t src, int key) {
     std::lock_guard<std::mutex> g(tpal_mx);
-    uint64_t id = (uint64_t)sig << 32 | (uint32_t)key;
+    uint64_t id = (uint64_t)(src ? src : sig) << 32 | (uint32_t)key;
     auto f = metal_slot_of.find(id);
     if (f != metal_slot_of.end()) return f->second;
     int slot = -1;
-    for (auto& m : metal_bt3) {
-        if (m.first != sig) continue;
-        const std::vector<uint8_t>& d = m.second;
+    std::vector<const std::vector<uint8_t>*> ts;
+    if (src) { auto m = metal_src.find(src); if (m != metal_src.end()) ts.push_back(&m->second); }
+    else for (auto& m : metal_bt3) if (m.first == sig) ts.push_back(&m.second);
+    for (auto* tp : ts) {
+        const std::vector<uint8_t>& d = *tp;
         uint32_t c; memcpy(&c, &d[12], 4);
         for (uint32_t i = 0, at = 16; i < c && at + 4 + 128 * 128 * 5 <= d.size(); i++, at += 4 + 128 * 128 * 5) {
             int k; memcpy(&k, &d[at], 4);
@@ -1297,6 +1311,11 @@ static uint32_t toon_pak_of(uint32_t hdr) {
     }
     return pak;
 }
+static const std::vector<uint8_t>* bt3_ramps(const TpalSet& s) {   // tpal_mx held
+    if (s.src) { auto t = tpal_src.find(s.src); if (t != tpal_src.end()) return &t->second; }
+    for (auto& l : tpal_bt3) if (l.first == s.sig) return &l.second;
+    return nullptr;
+}
 static uint32_t toon_tpal(uint32_t hdr, int mat) {
     if (!hdr || mat < 0) return 0;
     TpalSet* set = nullptr;
@@ -1306,6 +1325,15 @@ static uint32_t toon_tpal(uint32_t hdr, int mat) {
         set->ep = toon_epoch;
         uint32_t sg = toon_sig_mem(hdr);
         if (sg != set->sig) { ToonStall ts_; set->sig = sg; set->pak = toon_pak_of(hdr); set->hash = 0; }   // another model loaded at this address
+        {
+            uint32_t src = 0;
+            { std::lock_guard<std::mutex> g(tpal_mx); auto p = bt3_pak_src.find(set->pak); if (p != bt3_pak_src.end() && tpal_src.count(p->second)) src = p->second; }
+            if (src != set->src) {
+                set->src = src;
+                static int logs = 0;
+                if (logs++ < 40) printf("cel: tablas BT3 del modelo 0x%08X, pak 0x%08X, %s 0x%08X\n", hdr, set->pak, src ? "por origen" : "por firma", src ? src : set->sig);
+            }
+        }
         std::vector<uint8_t> d;
         bool live = false;
         {
@@ -1327,12 +1355,12 @@ static uint32_t toon_tpal(uint32_t hdr, int mat) {
         set->gl.fill(0);
         {
             std::lock_guard<std::mutex> g(tpal_mx);
-            for (auto& l : tpal_bt3) if (l.first == set->sig) gl_fill(l.second);
+            if (auto t = bt3_ramps(*set)) gl_fill(*t);
         }
         if (src) gl_fill(d);
         if (d.empty() && toon_mode() == 2) {   // Cel BT3 without a TPAL of his: the BT3 file's own ramps
             std::lock_guard<std::mutex> g(tpal_mx);
-            for (auto& l : tpal_bt3) if (l.first == set->sig) { d = l.second; src = 3; }
+            if (auto t = bt3_ramps(*set)) { d = *t; src = 3; }
         }
         uint32_t h = 2166136261u ^ (uint32_t)src;
         for (uint8_t x : d) h = (h ^ x) * 16777619u;
@@ -1376,7 +1404,7 @@ static uint32_t toon_tpal(uint32_t hdr, int mat) {
             if (q.calls >= 300) {
                 q.done = true; dn++;
                 bool reg = false;
-                { std::lock_guard<std::mutex> g(tpal_mx); for (auto& l : tpal_bt3) if (l.first == set->sig) reg = true; }
+                { std::lock_guard<std::mutex> g(tpal_mx); reg = bt3_ramps(*set) != nullptr; }
                 std::string ms; for (int m : q.miss) { if (ms.size() > 60) { ms += " ..."; break; } ms += " " + std::to_string(m); }
                 printf("cel: diagnostico BT3, modelo 0x%08X, firma 0x%08X, fuente %s, rampas BT3 registradas %s, %d materiales, %d de %d dibujos con rampa, sin rampa:%s\n",
                        hdr, set->sig, set->live == 1 ? "editor" : set->live == 2 ? "pak (.tpal)" : set->live == 3 ? "BT3" : "ninguna", reg ? "si" : "no", (int)set->e.size(), q.hits, q.calls, ms.empty() ? " ninguno" : ms.c_str());
@@ -5022,7 +5050,7 @@ static void primitive_one(uint32_t arg) {
         toon_grp = part >= 0 ? (toon_epoch << 8) | (uint32_t)(part + 1) : 0;
         toon_face = part >= 0 && flag == 6;
         toon_tp = part >= 0 ? toon_tpal(toon_last_hdr, mat) : 0;
-        if (part >= 0 && mat >= 0 && toon_mode() == 2) for (auto& t : tpal_sets) if (t.hdr == toon_last_hdr) { int s = metal_slot(t.sig, mat); if (s >= 0) toon_tp = (toon_tp & ~0xFC00u) | (uint32_t)(s + 1) << 10; break; }   // flags bits 2..7: metal slot + 1
+        if (part >= 0 && mat >= 0 && toon_mode() == 2) for (auto& t : tpal_sets) if (t.hdr == toon_last_hdr) { int s = metal_slot(t.sig, t.src, mat); if (s >= 0) toon_tp = (toon_tp & ~0xFC00u) | (uint32_t)(s + 1) << 10; break; }   // flags bits 2..7: metal slot + 1
         static int logs = 0;
         static int last_src = -1; static float last_s[3];
         if (sun_src != last_src || std::fabs(sx - last_s[0]) + std::fabs(sy - last_s[1]) + std::fabs(sz - last_s[2]) > 0.01f) { last_src = sun_src; last_s[0] = sx; last_s[1] = sy; last_s[2] = sz; static int tot = 0; if (logs >= 1 && tot < 10) { logs = 0; tot++; } }

@@ -2531,7 +2531,21 @@ static Bt3Data* bt3_data(const std::string& real) {   // bt3_mx held; real = P f
 }
 
 uint32_t psp_tpal_sig(const uint8_t* m, size_t n);
-int psp_tpal_bt3(uint32_t sig, const uint8_t* d, int n);
+int psp_tpal_bt3(uint32_t sig, uint32_t src, const uint8_t* d, int n);
+void psp_bt3_pak(uint32_t pak, uint32_t src);
+static uint32_t bt3_src_id(const std::string& real) { uint32_t h = 2166136261u; for (unsigned char c : real) h = (h ^ c) * 16777619u; return h ? h : 1; }
+// a character pak read at guest address: its BT3 source, so ramps and metal follow the colour (and damaged) and not the model signature
+static void bt3_pak_read(uint32_t guest, int idx) {
+    if (idx < 0 || strncasecmp(disc_pk[idx].fpath.c_str(), "Characters/", 11)) return;
+    const std::string& key = disc_pk[idx].key;
+    std::string real;
+    if (dmg_key(key)) { Bt3Lock g; auto it = bt3_dmg_of.find(key); if (it != bt3_dmg_of.end()) real = it->second.real; }
+    else { std::lock_guard<std::mutex> g(bt3_of_mx); auto it = bt3_of.find(key); if (it != bt3_of.end()) real = it->second.real; }
+    uint32_t src = real.empty() ? 0 : bt3_src_id(real);
+    psp_bt3_pak(guest, src);
+    static int logs = 0;
+    if (src && logs++ < 40) printf("cel: pak BT3 leido en 0x%08X, origen 0x%08X, %s\n", guest, src, key.c_str());
+}
 // BT3 cel (Graphics "Cel BT3"): the shading ramps of the character's own file, handed to the GPU by model signature
 static void bt3_shade_reg(Bt3Data* b, const std::vector<uint8_t>& model, const std::string& real) {
     const bt3::File& f = *b->f;
@@ -2555,7 +2569,7 @@ static void bt3_shade_reg(Bt3Data* b, const std::vector<uint8_t>& model, const s
     std::vector<uint8_t> tp;
     bool ok = bt3::shade_tpal(f, b->tk, clut, glow, tp);
     uint32_t sig = psp_tpal_sig(model.data(), model.size());
-    int st = psp_tpal_bt3(sig, ok ? tp.data() : nullptr, ok ? (int)tp.size() : 0);
+    int st = psp_tpal_bt3(sig, bt3_src_id(real), ok ? tp.data() : nullptr, ok ? (int)tp.size() : 0);
     static int logs = 0;
     if (logs < 400 && st != 1) {
         logs++;
@@ -2565,7 +2579,7 @@ static void bt3_shade_reg(Bt3Data* b, const std::vector<uint8_t>& model, const s
     }
 }
 
-int psp_metal_bt3(uint32_t sig, const uint8_t* d, int n);
+int psp_metal_bt3(uint32_t sig, uint32_t src, const uint8_t* d, int n);
 // BT3 metal (inside Cel BT3 / Mixed BT3): sphere and mask of every marked material, 128x128 each, handed to the GPU by model signature
 static void bt3_metal_reg(Bt3Data* b, const std::vector<uint8_t>& model, const std::string& real) {
     const bt3::File& f = *b->f;
@@ -2586,7 +2600,7 @@ static void bt3_metal_reg(Bt3Data* b, const std::vector<uint8_t>& model, const s
         const uint8_t* m; uint32_t n;
         static int fl = 0;
         if (f.entry(2, &m, &n) && n >= 0x70 && (bt3::u32(m + 0x0C) & 1) && fl++ < 20) printf("cel: metal BT3 sin datos (esfera %d, mascaras %d+%d, texturas %s), %s\n", m[0x4D], m[0x52], m[0x53], dir.empty() ? "CTEX" : "PNG", real.c_str());
-        psp_metal_bt3(sig, nullptr, 0);
+        psp_metal_bt3(sig, bt3_src_id(real), nullptr, 0);
         return;
     }
     std::vector<uint8_t> o(16);
@@ -2602,7 +2616,7 @@ static void bt3_metal_reg(Bt3Data* b, const std::vector<uint8_t>& model, const s
             k[y * 128 + x] = (uint8_t)std::min<uint32_t>(255, q * 255 / 128);
         }
     }
-    int st = psp_metal_bt3(sig, o.data(), (int)o.size());
+    int st = psp_metal_bt3(sig, bt3_src_id(real), o.data(), (int)o.size());
     static int logs = 0;
     if (logs < 60 && st != 1) {
         logs++;
@@ -7049,6 +7063,7 @@ static uint32_t disc_read(uint64_t pos, uint8_t* dst, uint32_t n) {
         }
         uint8_t* d = dst + (a - pos);
         uint32_t amount = (uint32_t)(b - a);
+        if (t.type == 2 && a == start) bt3_pak_read((uint32_t)(d - psp_mem), t.idx);
         const std::string* vr = t.type == 2 ? voice_raw_file((size_t)t.idx) : nullptr;
         if (t.type == 1) {
             memcpy(d, disc_index.data() + (a - start), std::min<uint64_t>(amount, disc_index.size() - (a - start)));
