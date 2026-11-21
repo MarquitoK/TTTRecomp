@@ -722,10 +722,13 @@ template <class T> static bool metal(const File& f, T tex, std::vector<Metal>& o
     int sp = m[0x4D], first = m[0x52], cnt = m[0x53];
     Metal s0{};
     if (!tex(sp, &s0.sw, &s0.sh, s0.sphere)) return false;
+    int nth = 0;
     for (int k : on) {
         if (off.count(k) || k >= KEY_FACE) continue;
         int mk = -1; int32_t a2[2], b2[2];
         if (ofs(k, a2)) for (int j = first; j < first + cnt && mk < 0; j++) if (ofs(j, b2) && a2[0] == b2[0] && a2[1] == b2[1]) mk = j;
+        if (!ct && cnt > 0) mk = first + std::min(nth, cnt - 1);   // opened CTEX (PNG folder): no VRAM offsets, masks follow the marked images in order
+        nth++;
         Metal e = s0; e.key = k;
         if (mk < 0 || !tex(mk, &e.mw, &e.mh, e.mask)) continue;
         out.push_back(std::move(e));

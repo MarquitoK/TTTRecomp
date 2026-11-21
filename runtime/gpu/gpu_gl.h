@@ -1122,8 +1122,8 @@ static bool glr_init() {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glGenTextures(1, &glr_metal);   // unit 10: BT3 metal atlas
-    glActiveTexture(GL_TEXTURE0 + 10);
+    glGenTextures(1, &glr_metal);   // unit 15: BT3 metal atlas
+    glActiveTexture(GL_TEXTURE0 + 15);
     glBindTexture(GL_TEXTURE_2D, glr_metal);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 1024, 1024, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
@@ -1178,7 +1178,7 @@ static bool glr_init() {
     glUniform1i(glu_ramp0, 3);
     glu_metal0 = glGetUniformLocation(glr_prog, "metal0");
     glu_metalnf = glGetUniformLocation(glr_prog, "metal_nf");
-    glUniform1i(glu_metal0, 10);
+    glUniform1i(glu_metal0, 15);
     return true;
 }
 
@@ -4109,7 +4109,7 @@ static void glr_flush_queue() {
         float nf[64];
         { std::lock_guard<std::mutex> g(tpal_mx); up.swap(metal_up); memcpy(nf, metal_nf, sizeof nf); }
         if (!up.empty()) {
-            glActiveTexture(GL_TEXTURE0 + 10);
+            glActiveTexture(GL_TEXTURE0 + 15);
             glBindTexture(GL_TEXTURE_2D, glr_metal);
             std::vector<uint8_t> mk(128 * 128 * 4);
             for (auto& u : up) {

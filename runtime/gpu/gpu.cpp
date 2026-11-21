@@ -1237,17 +1237,18 @@ static uint64_t metal_owner[32];
 static float metal_nf[64];
 static int metal_next = 0;
 static void metal_forget(uint32_t sig) { for (auto s = metal_slot_of.begin(); s != metal_slot_of.end();) if ((uint32_t)(s->first >> 32) == sig) s = metal_slot_of.erase(s); else ++s; }
-int psp_metal_bt3(uint32_t sig, const uint8_t* d, int n) {   // 0 new, 1 same, 2 replaced, 3 removed, 4 none
+int psp_metal_bt3(uint32_t sig, const uint8_t* d, int n) {   // 0 new, 1 same, 2 replaced, 3 none (an earlier table with this signature is kept, like the ramps), 4 none
     std::lock_guard<std::mutex> g(tpal_mx);
     bool ok = d && n >= 16 && !memcmp(d, "MTL1", 4);
-    metal_forget(sig);
     for (auto it = metal_bt3.begin(); it != metal_bt3.end(); ++it) if (it->first == sig) {
-        if (ok && it->second.size() == (size_t)n && !memcmp(it->second.data(), d, n)) return 1;
-        if (!ok) { metal_bt3.erase(it); return 3; }
+        if (!ok) return 3;
+        if (it->second.size() == (size_t)n && !memcmp(it->second.data(), d, n)) return 1;
+        metal_forget(sig);
         it->second.assign(d, d + n);
         return 2;
     }
     if (!ok) return 4;
+    metal_forget(sig);
     metal_bt3.push_back({sig, std::vector<uint8_t>(d, d + n)});
     return 0;
 }

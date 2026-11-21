@@ -2577,12 +2577,18 @@ static void bt3_metal_reg(Bt3Data* b, const std::vector<uint8_t>& model, const s
         char pn[16]; snprintf(pn, sizeof(pn), "/%02d.png", k + 1);
         std::vector<uint8_t> d; std::string err;
         if (!read_file(dir + pn, d, true) || !png_decode(d, w, h, px, &err)) return false;
-        for (auto& c : px) c = (c & 0xFFFFFFu) | (uint32_t)(((c >> 24) * 128 + 127) / 255) << 24;   // PNG alpha back to the PS2 range
+        for (auto& c : px) { uint32_t a = c >> 24; c = (c & 0xFFFFFFu) | (a ? (a + 1) / 2 : 0) << 24; }   // bt3_open.py writes a * 2 - 1
         return true;
     };
     std::vector<bt3::Metal> ms; float nr = 40.0f, fr = 120.0f;
     uint32_t sig = psp_tpal_sig(model.data(), model.size());
-    if (!bt3::metal(f, tex, ms, &nr, &fr)) { psp_metal_bt3(sig, nullptr, 0); return; }
+    if (!bt3::metal(f, tex, ms, &nr, &fr)) {
+        const uint8_t* m; uint32_t n;
+        static int fl = 0;
+        if (f.entry(2, &m, &n) && n >= 0x70 && (bt3::u32(m + 0x0C) & 1) && fl++ < 20) printf("cel: metal BT3 sin datos (esfera %d, mascaras %d+%d, texturas %s), %s\n", m[0x4D], m[0x52], m[0x53], dir.empty() ? "CTEX" : "PNG", real.c_str());
+        psp_metal_bt3(sig, nullptr, 0);
+        return;
+    }
     std::vector<uint8_t> o(16);
     memcpy(&o[0], "MTL1", 4); memcpy(&o[4], &nr, 4); memcpy(&o[8], &fr, 4); uint32_t c = (uint32_t)ms.size(); memcpy(&o[12], &c, 4);
     for (auto& e : ms) {
