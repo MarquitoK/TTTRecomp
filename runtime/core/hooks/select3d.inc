@@ -455,9 +455,30 @@ static void tn_fill(const Ctx& c) {
     if (got < roster::K_OLD / 2) { wait = 60; return; }   // the system text is not loaded yet
     psp_tn_char_names(v);
 }
+// select voice (item 79): one of the two Character Reference samples of the character chosen, when its colour selector opens
+static int sv_on() { static int v = -1, n = 0; if ((n++ & 255) == 0 || v < 0) { const char* e = getenv("TTT_SEL_VOICE"); v = e && *e ? atoi(e) : 1; } return v; }
+static int sv_sample_id(int s) {   // the list id of the Character Reference samples: a renamed original keeps its new id
+    for (auto& r : roster::defs().renames) if (r.sysid == s && r.newid >= 0 && r.newid != s) return r.newid < 161 ? r.newid : -1;
+    return s >= 0 && s < 161 ? s : -1;
+}
+static void sv_tick(const Ctx& c) {
+    if (sv_req >= 0) {
+        int s = sv_req, b = sv_sample_id(s);
+        sv_req = -1;
+        if (cr_on() && sv_on() && b >= 0 && cv_owner() != 1) {
+            std::string n = cv_sample_name(b, rand() % 2);
+            if (psp_cr_voice(n) < 0) n = cv_sample_name(b, 0);
+            if (psp_cr_voice(n) >= 0) { cr_vplay_file(n, 2); cr_vsys = s; }
+            static int logs = 0;
+            if (logs++ < 20) { printf("seleccion: voz %s del personaje %d%s\n", n.c_str(), s, psp_cr_voice(n) >= 0 ? "" : " (no esta en el mod)"); fflush(stdout); }
+        }
+    }
+    if (cr_on() && cv_owner() != 1 && (cr_vplay || cr_vkill || !cr_vname.empty())) cr_vtick(c);
+}
 static void s3d_tick(const Ctx& c) {
     s3d_frame++;
     tn_fill(c);
+    sv_tick(c);
     if (cv_owner() == 3 || cv_owner() == 4) return;   // the game room, the map select 3D (map3d.inc); the game room's models (room3d.inc) until it closes
     if (!gen_run && !s3d_enabled() && s3d_alive() && gen_env("TTT_GEN_RENDERS", 0)) { int cn = s3d_cursor(c); if (cn >= 0) s3d_n = cn; }   // without the 3D the big render still follows the colour
     if (s3d_alive() && s3d_rn >= 0 && cv_owner() != 1 && !cv_busy()) gen_check(c);

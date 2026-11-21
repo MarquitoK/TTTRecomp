@@ -44,6 +44,7 @@ static bool cr_self = false, cr_talk = false;
 static int cr_next_st = -1, cr_next_ph = CP_LIST, cr_menu = 0, cr_comm = 0, cr_ctime = 0, cr_costume = 0, cr_pscroll = 0;
 static int cr_vreq = -1, cr_vkind = 0;   // pending Chi-Chi line; 0 none, 1 Chi-Chi, 2 character sample
 static bool cr_vplay = false, cr_vend = false;
+static int cr_vsys = -1;   // character of a select voice (its model moves the mouth), -1 = the viewer's own sample
 
 // voices: AT3 entries of the mod played like the game's voices (category 1, stream 1: voices volume and voice language packs)
 static const uint32_t CR_SND = 0x08A78EE8u;   // holds the sound manager
@@ -51,7 +52,7 @@ static std::string cr_vname;
 static bool cr_vkill = false, cr_vseen = false;
 static int cr_vwait = 0;
 static void cr_vstop() { if (cr_vplay) cr_vkill = true; cr_vplay = false; cr_vend = false; cr_vreq = -1; cr_vkind = 0; cr_vname.clear(); }
-static void cr_vplay_file(const std::string& name, int kind) { cr_vstop(); cr_vname = name; cr_vkind = kind; }
+static void cr_vplay_file(const std::string& name, int kind) { cr_vstop(); cr_vname = name; cr_vkind = kind; cr_vsys = -1; }
 static std::string cv_sample_name(int b, int k) { char n[32]; snprintf(n, sizeof n, "chara_%03d_%d", b, k); return n; }
 static void cr_sample() { cr_vplay_file(cv_sample_name(cr_cursor, rand() % 2), 2); }
 // screen music: Music/4410_ost_sm_4 on channel 0 once the main menu's track has faded (as every menu screen, only when nothing plays)
@@ -566,7 +567,7 @@ static bool cv_lv1(uint32_t ent) { return cv.dmg == 1 && cv_is(ent); }
 // mouth level for the lip sync of the viewer model while its sample plays (-2 = not the viewer, the normal rule)
 static int cv_lip(uint32_t ent) {
     if (!cv_is(ent)) return -2;
-    return cv.face < 0 && cr_vkind == 2 && (cr_vplay || !cr_vname.empty()) ? psp_lip_dir("menus/chara_reference_samples") : -1;
+    return cv.face < 0 && cr_vkind == 2 && (cr_vsys < 0 || cr_vsys == cv.sys) && (cr_vplay || !cr_vname.empty()) ? psp_lip_dir("menus/chara_reference_samples") : -1;
 }
 static bool cv_blink(uint32_t ent) { return cv.face == 8 && cv_is(ent); }   // eyes held closed: the port's blink texture swap (marker 0xE3 bit 10)
 static void cv_flags() {   // battle flags as the modules read them: no pause (0x100), not loading (0x2000)

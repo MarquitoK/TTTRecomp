@@ -9,7 +9,8 @@ static int cs_focus[4], cs_av[4];   // per player row: focused row (0 colour, 1 
 static bool cs_two[4];
 static int cs_menu[4] = {-1, -1, -1, -1};   // character the costume of a row was chosen for
 static int s3d_sys_of_menu(int n);
-static uint32_t cs_cent[4];   // PACKFILE entry of the colour under each player's selector
+static uint32_t cs_cent[4];
+static int sv_req = -1;   // select voice (item 79): character whose colour selector just opened, played by select3d.inc   // PACKFILE entry of the colour under each player's selector
 std::string psp_colour_name(uint32_t idx, int lang);
 
 static uint32_t cs_str(const char* s, int k) {
@@ -160,6 +161,12 @@ static bool cs_wrap(uint32_t dir, Ctx& c, void (*orig)(Ctx&)) {
         Ctx c0 = c;
         int p = (int)psp_l32(obj + 0x68);
         if (c.r[5] == 0) cs_sel_load();   // the reset on opening is decided by the input of each row (same on every machine)
+        if (c.r[5] == 0) {   // opened (0x089FC6B8): after the character, and after its form when it has transformations
+            uint32_t o2 = psp_l32(obj + 0xC), e = o2 ? psp_l32(o2 + 0x40) + 0xA0 : 0;
+            uint32_t rec = e ? mpm_call(c0, psp_l32(e + 4), o2 + (uint32_t)(int32_t)(int16_t)psp_l16(e), psp_l32(obj + 0x68)) : 0;
+            int s = rec ? s3d_sys_of_menu((int)(psp_l32(rec + 4) & 0xFF)) : -1;
+            if (s >= 0) sv_req = s;
+        }
         if (cs_ready != 1) {
             orig(c);
             int r = cs_text_slot(c0, obj) ? 1 : 0;

@@ -267,6 +267,7 @@ static std::vector<std::string> ov_names(std::initializer_list<std::pair<const c
     for (auto& p : l) v.push_back(ov_s(p.first, p.second));
     return v;
 }
+int psp_cr_pak();
 static std::vector<std::string> ov_onoff() { return ov_names({{"Off", "No"}, {"On", "Sí"}}); }
 static OvRow ov_head(const char* en, const char* es) { OvRow r; r.kind = RK_HEAD; r.en = en; r.es = es; return r; }
 static OvRow ov_val(const char* en, const char* es, std::function<int()> get, std::function<void(int)> set, std::vector<std::string> names, bool restart = false, bool on = true) {
@@ -596,6 +597,7 @@ static std::vector<OvRow> ov_page() {
         r.push_back(ov_val("Sound", "Sonido", [] { return snd_3d < 0 ? 0 : snd_3d > 2 ? 2 : snd_3d; }, [](int v) { snd_3d = v; settings_save(); },
                            lv({{"Original stereo", "Estéreo original"}, {"3D stereo", "Estéreo 3D"}, {"Wide 3D stereo", "Estéreo 3D amplio"}})));
         r.push_back(ov_gw("Underwater sound", "Sonido bajo el agua", &g.sndw, OFF()));
+        if (psp_cr_pak() >= 0) r.push_back(ov_gw("Voice on character select", "Voz al elegir personaje", &g.selv, OFF()));
     } else if (ov_tab == OV_TAB_CTL && ov_sub == 4) {
         r.push_back(ov_val("Rumble intensity", "Intensidad de la vibración", [] { return std::min(4, (cfg.rumble + 12) / 25); }, [](int v) { cfg.rumble = v * 25; rumble_level = cfg.rumble; cfg_save(); },
                            lv({{"Off", "No"}, {"25 %", "25 %"}, {"50 %", "50 %"}, {"75 %", "75 %"}, {"100 %", "100 %"}})));
@@ -796,6 +798,7 @@ static const OvDesc OV_DESC[] = {
     {"Smooth motion", "Interpolates the movement between frames. Low latency answers faster.", "Interpola el movimiento entre cuadros. Baja latencia responde más rápido."},
     {"Sound", "Original stereo or 3D stereo that places the sounds around you.", "Estéreo original o estéreo 3D que ubica los sonidos a tu alrededor."},
     {"Underwater sound", "Muffles the sound when the camera is under the water.", "Amortigua el sonido cuando la cámara está bajo el agua."},
+    {"Voice on character select", "The character says one of its lines when you choose it (Character Reference mod).", "El personaje dice una de sus frases al elegirlo (mod Character Reference)."},
     {"+ Install .mkpak...", "Installs a mod from a .mkpak file.", "Instala un mod desde un archivo .mkpak."},
     {"Rumble intensity", "Strength of the controller rumble.", "Fuerza de la vibración del mando."},
     {"Test rumble", "Makes the controller rumble for a moment.", "Hace vibrar el mando un momento."},
